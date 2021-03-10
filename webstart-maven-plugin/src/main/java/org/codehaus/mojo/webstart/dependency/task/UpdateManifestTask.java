@@ -22,7 +22,6 @@ package org.codehaus.mojo.webstart.dependency.task;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.codehaus.mojo.webstart.dependency.JnlpDependencyConfig;
 import org.codehaus.mojo.webstart.util.IOUtil;
-import org.codehaus.mojo.webstart.util.JarUtil;
 import org.codehaus.plexus.component.annotations.Component;
 import org.codehaus.plexus.component.annotations.Requirement;
 
@@ -50,6 +49,9 @@ import java.util.zip.ZipFile;
 public class UpdateManifestTask
     extends AbstractJnlpTask
 {
+	
+    private static final String INDEX_LIST = "META-INF/INDEX.LIST";
+    
     public static final String ROLE_HINT = "UpdateManifestTask";
 
     @Requirement
@@ -122,6 +124,11 @@ public class UpdateManifestTask
 
                 // skip the original manifest
                 if ( JarFile.MANIFEST_NAME.equals( entry.getName() ) )
+                {
+                    continue;
+                }
+                //skip the INDEX.LIST file
+                if (INDEX_LIST.equals(entry.getName()))
                 {
                     continue;
                 }
