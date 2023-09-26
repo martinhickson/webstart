@@ -8,9 +8,8 @@
     <version>50</version>
   </parent>
 
-  <groupId>org.codehaus.mojo</groupId>
   <artifactId>webstart</artifactId>
-  <version>1.0-beta-7.bravura.8.java7</version>
+  <version>1.0-beta-7.bravura.14.java7</version>
   <packaging>pom</packaging>
 
   <name>MWEBSTART :: Project</name>
