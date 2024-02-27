@@ -5,7 +5,7 @@
   <parent>
     <groupId>org.codehaus.mojo</groupId>
     <artifactId>webstart</artifactId>
-    <version>1.0-beta-7.bravura.9.java7</version>
+    <version>1.0-beta-7.bravura.10.java7</version>
   </parent>
 
   <artifactId>webstart-maven-plugin</artifactId>
@@ -49,11 +49,16 @@
       <groupId>org.apache.maven</groupId>
       <artifactId>maven-model</artifactId>
     </dependency>
-	<dependency>
-	  <groupId> org.apache.commons</groupId>
-	  <artifactId>commons-compress</artifactId>
-          <version>1.24.0</version>
+    <dependency>
+      <groupId> org.apache.commons</groupId>
+      <artifactId>commons-compress</artifactId>
+      <version>1.26.0</version>
 	</dependency>
+    <dependency>
+      <groupId>org.ow2.asm</groupId>
+      <artifactId>asm</artifactId>
+      <version>9.6</version>
+    </dependency>
     <dependency>
       <groupId>org.apache.maven</groupId>
       <artifactId>maven-artifact</artifactId>
