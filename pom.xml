@@ -8,9 +8,8 @@
     <version>50</version>
   </parent>
 
-  <groupId>org.codehaus.mojo</groupId>
   <artifactId>webstart</artifactId>
-  <version>1.0-beta-7.bravura.8.java7</version>
+  <version>1.0-beta-7.bravura.9.java7</version>
   <packaging>pom</packaging>
 
   <name>MWEBSTART :: Project</name>
@@ -104,7 +103,8 @@
 
   <properties>
     <mavenVersion>2.0.11</mavenVersion>
-    <mavenPluginPluginVersion>3.2</mavenPluginPluginVersion>
+    <!-- Using 3.2 resulted in errors during the helpmojo execution -->
+    <mavenPluginPluginVersion>3.11.0</mavenPluginPluginVersion>
     <keytoolVersion>1.5</keytoolVersion>
 
     <!-- release plugin configuration -->
@@ -361,6 +361,9 @@
               <artifactId>java15</artifactId>
               <version>1.0</version>
             </signature>
+            <!-- using false or omitting skip resulted in failed builds with ASM errors -->
+            <!-- during the help mojo execution -->
+            <skip>true</skip>
           </configuration>
         </plugin>
         <plugin>
