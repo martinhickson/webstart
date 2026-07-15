@@ -36,6 +36,7 @@ import org.codehaus.mojo.webstart.generator.ExtensionGeneratorConfig;
 import org.codehaus.mojo.webstart.generator.Generator;
 import org.codehaus.mojo.webstart.generator.GeneratorConfig;
 import org.codehaus.mojo.webstart.generator.GeneratorTechnicalConfig;
+import org.codehaus.mojo.webstart.util.BuildReport;
 import org.codehaus.mojo.webstart.util.IOUtil;
 
 import java.io.File;
@@ -324,6 +325,8 @@ public abstract class AbstractJnlpMojo
                 generateJnlpExtensionsFile( getWorkDirectory() );
             }
 
+            BuildReport.logWorkDirectorySummary( getLog(), getWorkDirectory() );
+
             // ---
             // Generate archive file if required
             // ---
@@ -337,7 +340,7 @@ public abstract class AbstractJnlpMojo
 
                 ioUtil.deleteFile( archive );
 
-                verboseLog( "Will create archive at location: " + archive );
+                getLog().info( "Creating distribution archive: " + archive.getAbsolutePath() );
 
                 ioUtil.createArchive( getWorkDirectory(), archive );
 
@@ -682,7 +685,7 @@ public abstract class AbstractJnlpMojo
                                               getWebstartJarURLForVelocity(), getEncoding() );
 
         GeneratorConfig generatorConfig =
-                new GeneratorConfig( getLibPath(), isPack200(), outputJarVersions, isUseUniqueVersions(), artifactWithMainClass,
+                new GeneratorConfig( getLibPath(), isEffectivePack200(), outputJarVersions, isUseUniqueVersions(), artifactWithMainClass,
                                      getDependencyFilenameStrategy(), packagedJnlpArtifacts, jnlpExtensions, getCodebase(),
                                      jnlp );
 
@@ -1109,7 +1112,7 @@ public abstract class AbstractJnlpMojo
                                               getWebstartJarURLForVelocity(), getEncoding() );
 
         ExtensionGeneratorConfig extensionGeneratorConfig =
-                new ExtensionGeneratorConfig( getLibPath(), isPack200(), outputJarVersions, isUseUniqueVersions(),
+                new ExtensionGeneratorConfig( getLibPath(), isEffectivePack200(), outputJarVersions, isUseUniqueVersions(),
                                               artifactWithMainClass, getDependencyFilenameStrategy(),
                                               extensionsJnlpArtifacts, getCodebase(), extension );
         ExtensionGenerator jnlpGenerator =
