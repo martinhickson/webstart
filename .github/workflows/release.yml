@@ -1,0 +1,157 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Release version (e.g., 1.0.1-bravura)'
+        required: true
+        default: '1.0.1-bravura'
+        type: string
+      skipTests:
+        description: 'Skip unit tests during build and deploy'
+        required: false
+        default: true
+        type: boolean
+      run_integration_tests:
+        description: 'Run webstart-it integration project before tagging'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      MAVEN_OPTS: >-
+        -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn
+      RELEASE_VERSION: ${{ github.event.inputs.release_version }}
+      BRANCH_NAME: v${{ github.event.inputs.release_version }}
+      TAG_NAME: v${{ github.event.inputs.release_version }}-release
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create release branch
+        run: |
+          git checkout -b "${{ env.BRANCH_NAME }}"
+          echo "Created branch: ${{ env.BRANCH_NAME }}"
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Update versions in all POM files
+        run: |
+          mvn versions:set -DnewVersion="${RELEASE_VERSION}" -DprocessAllModules -DgenerateBackupPoms=false
+          echo "Version update completed"
+
+      - name: Verify version updates
+        run: |
+          echo "Root POM version:"
+          grep -A 1 "<artifactId>webstart</artifactId>" pom.xml | grep "<version>"
+
+      - name: Commit and push version changes
+        run: |
+          git add -A
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Release version ${RELEASE_VERSION}"
+            git push origin "${BRANCH_NAME}"
+          fi
+
+      - name: Configure Maven for GitHub Packages
+        run: |
+          mkdir -p ~/.m2
+          cat > ~/.m2/settings.xml << 'EOF'
+          <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
+                                        http://maven.apache.org/xsd/settings-1.0.0.xsd">
+            <servers>
+              <server>
+                <id>github-packages</id>
+                <username>MAVEN_GITHUB_ACTOR</username>
+                <password>MAVEN_GITHUB_TOKEN</password>
+              </server>
+            </servers>
+          </settings>
+          EOF
+          sed -i "s|MAVEN_GITHUB_ACTOR|${GITHUB_ACTOR}|g; s|MAVEN_GITHUB_TOKEN|${GITHUB_TOKEN}|g" ~/.m2/settings.xml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+
+      - name: Build and install plugin
+        run: mvn clean install -ntp -DskipTests=${{ github.event.inputs.skipTests }} -Dinvoker.skip=true
+
+      - name: Run webstart-it integration tests
+        if: ${{ github.event.inputs.run_integration_tests == 'true' }}
+        run: |
+          mvn clean verify -ntp -f webstart-it/pom.xml -Dwebstart.plugin.version="${RELEASE_VERSION}"
+
+      - name: Create and push tag
+        run: |
+          git tag -a "${TAG_NAME}" -m "Release ${RELEASE_VERSION}"
+          git push origin "${TAG_NAME}"
+
+      - name: Publish to GitHub Packages
+        run: |
+          mvn deploy -ntp -DskipTests=${{ github.event.inputs.skipTests }} \
+            -DaltDeploymentRepository=github-packages::default::https://maven.pkg.github.com/${{ github.repository }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-artifacts-${{ github.event.inputs.release_version }}
+          path: |
+            **/target/*.jar
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ env.TAG_NAME }}
+          name: Release ${{ env.RELEASE_VERSION }}
+          body: |
+            Release ${{ env.RELEASE_VERSION }}
+
+            This release includes:
+            - Maven artifacts published to GitHub Packages
+            - Release branch: ${{ env.BRANCH_NAME }}
+            - Tag: ${{ env.TAG_NAME }}
+
+            Install with:
+            ```xml
+            <plugin>
+              <groupId>org.codehaus.mojo</groupId>
+              <artifactId>webstart-maven-plugin</artifactId>
+              <version>${{ env.RELEASE_VERSION }}</version>
+            </plugin>
+            ```
+          draft: false
+          prerelease: false
+          files: |
+            **/target/*.jar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

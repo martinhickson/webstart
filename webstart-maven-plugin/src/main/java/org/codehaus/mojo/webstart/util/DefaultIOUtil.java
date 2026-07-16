@@ -20,6 +20,7 @@ package org.codehaus.mojo.webstart.util;
  */
 
 import org.apache.maven.plugin.MojoExecutionException;
+import org.codehaus.mojo.webstart.util.BuildReport;
 import org.codehaus.plexus.archiver.Archiver;
 import org.codehaus.plexus.component.annotations.Component;
 import org.codehaus.plexus.component.annotations.Requirement;
@@ -65,7 +66,7 @@ public class DefaultIOUtil
     {
         if ( !sourceDirectory.exists() )
         {
-            getLogger().info( "Directory does not exist " + sourceDirectory.getAbsolutePath() );
+            getLogger().debug( "Directory does not exist " + sourceDirectory.getAbsolutePath() );
         }
         else
         {
@@ -382,6 +383,7 @@ public class DefaultIOUtil
         try
         {
             zipArchiver.createArchive();
+            BuildReport.logDistributionArchive( getLogger(), archive );
         }
         catch ( IOException e )
         {

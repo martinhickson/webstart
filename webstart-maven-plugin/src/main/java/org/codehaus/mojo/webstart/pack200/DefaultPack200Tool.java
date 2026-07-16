@@ -38,8 +38,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.jar.JarFile;
 import java.util.jar.JarOutputStream;
-import java.util.jar.Pack200;
-import java.util.jar.Pack200.Packer;
 import java.util.zip.Deflater;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
@@ -81,14 +79,16 @@ public class DefaultPack200Tool
 
             jar = new JarFile( source, false );
 
-            if (commonsCompress) {
-                org.apache.commons.compress.java.util.jar.Pack200.Packer packer = org.apache.commons.compress.java.util.jar.Pack200.newPacker();
+            if ( commonsCompress )
+            {
+                org.apache.commons.compress.java.util.jar.Pack200.Packer packer =
+                        org.apache.commons.compress.java.util.jar.Pack200.newPacker();
                 packer.properties().putAll( props );
                 packer.pack( jar, out );
-            } else {
-                Pack200.Packer packer = Pack200.newPacker();
-                packer.properties().putAll( props );
-                packer.pack( jar, out );
+            }
+            else
+            {
+                Pack200Support.packWithJdk( jar, out, props );
             }
         }
         finally
@@ -135,14 +135,16 @@ public class DefaultPack200Tool
 
             out = new JarOutputStream( new BufferedOutputStream( new FileOutputStream( destination ) ) );
 
-            if (commonsCompress) {
-                org.apache.commons.compress.java.util.jar.Pack200.Unpacker unpacker = org.apache.commons.compress.java.util.jar.Pack200.newUnpacker();
+            if ( commonsCompress )
+            {
+                org.apache.commons.compress.java.util.jar.Pack200.Unpacker unpacker =
+                        org.apache.commons.compress.java.util.jar.Pack200.newUnpacker();
                 unpacker.properties().putAll( props );
                 unpacker.unpack( in, out );
-            } else {
-                Pack200.Unpacker unpacker = Pack200.newUnpacker();
-                unpacker.properties().putAll( props );
-                unpacker.unpack( in, out );
+            }
+            else
+            {
+                Pack200Support.unpackWithJdk( in, out, props );
             }
         }
         finally
@@ -153,15 +155,13 @@ public class DefaultPack200Tool
     }
 
     @Override
-    public void packJars( File directory, FileFilter jarFileFilter, boolean gzip, List<String> passFiles, boolean commonsCompress )
+    public void packJars( File directory, FileFilter jarFileFilter, boolean gzip, List<String> passFiles,
+                          boolean commonsCompress )
             throws IOException
     {
-        // getLog().debug( "packJars for " + directory );
         File[] jarFiles = directory.listFiles( jarFileFilter );
         for ( File jarFile1 : jarFiles )
         {
-            // getLog().debug( "packJars: " + jarFiles[i] );
-
             final String extension = gzip ? PACK_GZ_EXTENSION : PACK_EXTENSION;
 
             File jarFile = jarFile1;
@@ -170,18 +170,7 @@ public class DefaultPack200Tool
 
             deleteFile( pack200Jar );
 
-            Map<String, String> propMap = new HashMap<>();
-            // Work around a JDK bug affecting large JAR files, see MWEBSTART-125
-            propMap.put( Pack200.Packer.SEGMENT_LIMIT, String.valueOf( -1 ) );
-
-            // set passFiles if available
-            if ( passFiles != null && !passFiles.isEmpty() )
-            {
-                for ( int j = 0; j < passFiles.size(); j++ )
-                {
-                    propMap.put( Packer.PASS_FILE_PFX + j, passFiles.get( j ) );
-                }
-            }
+            Map<String, String> propMap = createPropertyMap( passFiles );
 
             pack( jarFile, pack200Jar, propMap, gzip, commonsCompress );
             setLastModified( pack200Jar, jarFile.lastModified() );
@@ -189,7 +178,7 @@ public class DefaultPack200Tool
     }
 
     @Override
-    public File packJar( File jarFile, boolean gzip, List<String> passFiles, boolean commonsCompress)
+    public File packJar( File jarFile, boolean gzip, List<String> passFiles, boolean commonsCompress )
             throws IOException
     {
         final String extension = gzip ? PACK_GZ_EXTENSION : PACK_EXTENSION;
@@ -198,18 +187,7 @@ public class DefaultPack200Tool
 
         deleteFile( pack200Jar );
 
-        Map<String, String> propMap = new HashMap<>();
-        // Work around a JDK bug affecting large JAR files, see MWEBSTART-125
-        propMap.put( Pack200.Packer.SEGMENT_LIMIT, String.valueOf( -1 ) );
-
-        // set passFiles if available
-        if ( passFiles != null && !passFiles.isEmpty() )
-        {
-            for ( int j = 0; j < passFiles.size(); j++ )
-            {
-                propMap.put( Packer.PASS_FILE_PFX + j, passFiles.get( j ) );
-            }
-        }
+        Map<String, String> propMap = createPropertyMap( passFiles );
 
         pack( jarFile, pack200Jar, propMap, gzip, commonsCompress );
         setLastModified( pack200Jar, jarFile.lastModified() );
@@ -221,7 +199,6 @@ public class DefaultPack200Tool
     public void unpackJars( File directory, FileFilter pack200FileFilter, boolean commonsCompress )
             throws IOException
     {
-        // getLog().debug( "unpackJars for " + directory );
         File[] packFiles = directory.listFiles( pack200FileFilter );
         for ( File packFile : packFiles )
         {
@@ -251,6 +228,21 @@ public class DefaultPack200Tool
         unpack( packFile, jarFile, Collections.<String, String>emptyMap(), commonsCompress );
         setLastModified( jarFile, packFile.lastModified() );
         return jarFile;
+    }
+
+    private Map<String, String> createPropertyMap( List<String> passFiles )
+    {
+        Map<String, String> propMap = new HashMap<>();
+        propMap.put( Pack200Support.SEGMENT_LIMIT, String.valueOf( -1 ) );
+
+        if ( passFiles != null && !passFiles.isEmpty() )
+        {
+            for ( int j = 0; j < passFiles.size(); j++ )
+            {
+                propMap.put( Pack200Support.PASS_FILE_PFX + j, passFiles.get( j ) );
+            }
+        }
+        return propMap;
     }
 
     private void deleteFile( File file )

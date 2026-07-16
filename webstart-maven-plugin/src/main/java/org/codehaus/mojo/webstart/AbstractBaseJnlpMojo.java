@@ -29,6 +29,7 @@ import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.project.MavenProject;
 import org.codehaus.mojo.webstart.dependency.filenaming.DependencyFilenameStrategy;
 import org.codehaus.mojo.webstart.pack200.Pack200Config;
+import org.codehaus.mojo.webstart.pack200.Pack200Support;
 import org.codehaus.mojo.webstart.pack200.Pack200Tool;
 import org.codehaus.mojo.webstart.sign.SignConfig;
 import org.codehaus.mojo.webstart.sign.SignTool;
@@ -128,6 +129,8 @@ public abstract class AbstractBaseJnlpMojo
      */
     @Parameter
     private Pack200Config pack200;
+
+    private boolean pack200UnavailableWarningLogged;
 
     /**
      * The Sign Config.
@@ -419,6 +422,30 @@ public abstract class AbstractBaseJnlpMojo
     }
 
     /**
+     * Returns whether Pack200 processing should run for this build.
+     * When Pack200 is configured but unavailable on the current JDK, logs a warning once and returns {@code false}.
+     *
+     * @return {@code true} if Pack200 compression should be applied
+     */
+    protected boolean isEffectivePack200()
+    {
+        if ( !isPack200() )
+        {
+            return false;
+        }
+        if ( Pack200Support.isRuntimeAvailable( isCommonsCompressEnabled() ) )
+        {
+            return true;
+        }
+        if ( !pack200UnavailableWarningLogged )
+        {
+            getLog().warn( Pack200Support.getUnavailableWarningMessage() );
+            pack200UnavailableWarningLogged = true;
+        }
+        return false;
+    }
+
+    /**
      * Returns the files to be passed without pack200 compression.
      *
      * @return Returns the list value of the pack200.passFiles.
@@ -695,7 +722,7 @@ public abstract class AbstractBaseJnlpMojo
                 removeExistingSignatures( getLibDirectory() );
             }
 
-            if ( isPack200() )
+            if ( isEffectivePack200() )
             {
 
                 //TODO tchemit  use a temporary directory to pack-unpack
@@ -731,7 +758,7 @@ public abstract class AbstractBaseJnlpMojo
             makeUnprocessedFilesFinal( getLibDirectory() );
         }
 
-        if ( isPack200() )
+        if ( isEffectivePack200() )
         {
             verboseLog( "-- Pack jars" );
             pack200Jars( getLibDirectory(), processedJarFileFilter );
