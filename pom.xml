@@ -9,7 +9,7 @@
   </parent>
 
   <artifactId>webstart</artifactId>
-  <version>1.0.1-bravura-SNAPSHOT</version>
+  <version>1.0.7-bravura</version>
   <packaging>pom</packaging>
 
   <name>MWEBSTART :: Project</name>
