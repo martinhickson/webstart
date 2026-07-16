@@ -22,13 +22,13 @@ mvn clean verify -f webstart-it/pom.xml
 Override the plugin version if needed:
 
 ```bash
-mvn clean verify -f webstart-it/pom.xml -Dwebstart.plugin.version=1.0.1-bravura-SNAPSHOT
+mvn clean verify -f webstart-it/pom.xml -Dwebstart.plugin.version=1.0.7-bravura
 ```
 
 ## What it verifies
 
 - JNLP inline generation with signing on a modern JDK
 - Pack200 configured but gracefully skipped when the JDK Pack200 API is unavailable (with a Maven warning)
-- End-to-end plugin execution independent of the invoker IT suite
+- End-to-end plugin execution as a standalone integration test
 
 Expected output includes `target/jnlp/launch.jnlp` and signed JAR artifacts under `target/jnlp/`.

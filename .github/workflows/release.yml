@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: 'Release version (e.g., 1.0.1-bravura)'
+        description: 'Release version (e.g., 1.0.7-bravura)'
         required: true
-        default: '1.0.1-bravura'
+        default: '1.0.7-bravura'
         type: string
       skipTests:
         description: 'Skip unit tests during build and deploy'
@@ -100,7 +100,7 @@ jobs:
           GITHUB_ACTOR: ${{ github.actor }}
 
       - name: Build and install plugin
-        run: mvn clean install -ntp -DskipTests=${{ github.event.inputs.skipTests }} -Dinvoker.skip=true
+        run: mvn clean install -ntp -DskipTests=${{ github.event.inputs.skipTests }}
 
       - name: Run webstart-it integration tests
         if: ${{ github.event.inputs.run_integration_tests == 'true' }}

@@ -21,7 +21,7 @@ jobs:
           cache: maven
 
       - name: Install project
-        run: mvn --show-version --errors --batch-mode -ntp clean install -DskipTests -Dinvoker.skip=true
+        run: mvn --show-version --errors --batch-mode -ntp clean install -DskipTests
 
       - name: Verify installed plugin contains build report
         run: |

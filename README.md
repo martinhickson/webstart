@@ -1,14 +1,14 @@
 # A WebStart Plugin for Maven
 
-[![Main](https://github.com/martinhickson/webstart/actions/workflows/main.yml/badge.svg)](https://github.com/martinhickson/webstart/actions/workflows/main.yml)
-[![JDKBuilds](https://github.com/martinhickson/webstart/actions/workflows/jdkbuilds.yml/badge.svg)](https://github.com/martinhickson/webstart/actions/workflows/jdkbuilds.yml)
+[![Integration Test](https://github.com/martinhickson/webstart/actions/workflows/integration-test.yml/badge.svg)](https://github.com/martinhickson/webstart/actions/workflows/integration-test.yml)
+[![Release](https://github.com/martinhickson/webstart/actions/workflows/release.yml/badge.svg)](https://github.com/martinhickson/webstart/actions/workflows/release.yml)
 [![MIT Licence](https://img.shields.io/github/license/martinhickson/webstart.svg?label=License)](http://opensource.org/licenses/MIT)
 
 Build, sign, and package **Java Web Start** applications with Maven. This plugin generates JNLP descriptors, bundles dependencies, signs JARs, and optionally applies Pack200 compression — ready for deployment with [IcedTea-Web](https://github.com/martinhickson/IcedTea-Web) or any JNLP-aware client runtime.
 
 Actively maintained for modern JDKs, cloud code signing, and current enterprise use.
 
-**Current version:** `1.0.1-bravura-SNAPSHOT` · **Default branch:** `maintenance`
+**Latest release:** [`1.0.7-bravura`](https://github.com/martinhickson/webstart/releases/tag/v1.0.7-bravura-release) · **Default branch:** `main`
 
 ---
 
@@ -33,7 +33,7 @@ Add the plugin to your `pom.xml` and bind the `jnlp-inline` goal (simplest path 
     <plugin>
       <groupId>org.codehaus.mojo</groupId>
       <artifactId>webstart-maven-plugin</artifactId>
-      <version>1.0.1-bravura-SNAPSHOT</version>
+      <version>1.0.7-bravura</version>
       <executions>
         <execution>
           <phase>package</phase>
@@ -60,6 +60,31 @@ mvn clean package
 ```
 
 Output lands under `target/jnlp/` — including `launch.jnlp`, signed JARs, and a distributable ZIP.
+
+### Installing from GitHub Packages
+
+Released artifacts are published to GitHub Packages. Add the repository and authenticate with a GitHub personal access token (`read:packages`):
+
+```xml
+<repositories>
+  <repository>
+    <id>github-packages</id>
+    <url>https://maven.pkg.github.com/martinhickson/webstart</url>
+  </repository>
+</repositories>
+```
+
+In `~/.m2/settings.xml`:
+
+```xml
+<servers>
+  <server>
+    <id>github-packages</id>
+    <username>YOUR_GITHUB_USERNAME</username>
+    <password>YOUR_GITHUB_TOKEN</password>
+  </server>
+</servers>
+```
 
 ---
 
@@ -118,7 +143,7 @@ Pack200 is still relevant for some legacy client runtimes. On JDK 14+, the JDK P
 
 ### Separate JNLP file per module (`jnlp` goal)
 
-For multi-module layouts or WAR packaging, use the `jnlp` goal instead of `jnlp-inline`. See the `src/it/` projects in this repository for patterns.
+For multi-module layouts or WAR packaging, use the `jnlp` goal instead of `jnlp-inline`. See [webstart-it/](webstart-it/) for a working JDK 21 example.
 
 ---
 
@@ -147,7 +172,7 @@ Service-principal authentication with secrets supplied from the environment (rec
     <azure.keyvault.cert-name>my-code-signing-cert</azure.keyvault.cert-name>
     <azure.jca.version>2.11.0</azure.jca.version>
     <azure.jca.jar.path>${project.build.directory}/jca/azure-security-keyvault-jca-${azure.jca.version}.jar</azure.jca.jar.path>
-    <webstart.plugin.version>1.0.1-bravura-SNAPSHOT</webstart.plugin.version>
+    <webstart.plugin.version>1.0.7-bravura</webstart.plugin.version>
   </properties>
 
   <dependencies>
@@ -314,7 +339,7 @@ jarsigner \
 | Certificate chain warnings from `jarsigner` | Provide `<certchain>` with a PEM file containing the full chain from your CA |
 | `Could not obtain key store location` | Use `<keystore>NONE</keystore>` for Azure Key Vault (not a file path) |
 | Provider / module errors on JDK 11+ | Ensure `-J--module-path` and `-J--add-modules=com.azure.security.keyvault.jca` point at the copied JCA JAR |
-| Custom `-J` arguments ignored | Upgrade to `1.0.1-bravura-SNAPSHOT` or later — POM-configured arguments are preserved through signing |
+| Custom `-J` arguments ignored | Upgrade to `1.0.7-bravura` or later — POM-configured arguments are preserved through signing |
 | Auth failures in CI | Confirm Key Vault RBAC/access policy for the service principal or managed identity used by the agent |
 
 ---
@@ -356,21 +381,14 @@ Requirements: **JDK 11+** to compile; **JDK 21** supported for build and runtime
 ```bash
 git clone https://github.com/martinhickson/webstart.git
 cd webstart
-git checkout maintenance
+git checkout main
 
-mvn clean install -DskipTests -Dinvoker.skip=true
-```
-
-Invoker integration tests (JDK 8 toolchain):
-
-```bash
-mvn clean verify -Prun-its
+mvn clean install
 ```
 
 ### JDK 21 integration test
 
 ```bash
-mvn clean install -DskipTests -Dinvoker.skip=true
 mvn clean verify -f webstart-it/pom.xml
 ```
 
@@ -384,7 +402,8 @@ Releases are triggered manually from **Actions → Release → Run workflow**.
 
 | Input | Example | Description |
 |-------|---------|-------------|
-| `release_version` | `1.0.1-bravura` (default) | Version applied to all POMs |
+| `release_version` | `1.0.7-bravura` | Version applied to all POMs |
+| `skipTests` | `true` | Skip unit tests during build and deploy |
 | `run_integration_tests` | `false` | Run `webstart-it` before tagging |
 
 The workflow creates branch `v{version}`, tag `v{version}-release`, publishes to GitHub Packages, and opens a GitHub Release.
