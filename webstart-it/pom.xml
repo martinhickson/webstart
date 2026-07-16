@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>org.codehaus.mojo.webstart.it</groupId>
+  <artifactId>webstart-it</artifactId>
+  <version>1.0-SNAPSHOT</version>
+  <packaging>jar</packaging>
+
+  <name>WebStart JDK 21 Integration Test</name>
+  <description>
+    Standalone integration project for the webstart-maven-plugin on modern JDKs.
+    Not part of the parent reactor — run after installing the plugin locally.
+  </description>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <maven.compiler.source>11</maven.compiler.source>
+    <maven.compiler.target>11</maven.compiler.target>
+    <maven.compiler.release>11</maven.compiler.release>
+    <webstart.plugin.version>1.0.1-bravura-SNAPSHOT</webstart.plugin.version>
+  </properties>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.11.0</version>
+      </plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>webstart-maven-plugin</artifactId>
+        <version>${webstart.plugin.version}</version>
+        <executions>
+          <execution>
+            <phase>package</phase>
+            <goals>
+              <goal>jnlp-inline</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <jnlp>
+            <outputFile>launch.jnlp</outputFile>
+            <mainClass>org.codehaus.mojo.webstart.it.HelloWebStart</mainClass>
+          </jnlp>
+          <sign>
+            <keystore>${project.build.directory}/keystore</keystore>
+            <keypass>changeit</keypass>
+            <storepass>changeit</storepass>
+            <alias>webstart-it</alias>
+            <keyalg>RSA</keyalg>
+            <validity>365</validity>
+            <dnameCn>webstart-it.example.com</dnameCn>
+            <dnameOu>WebStart IT</dnameOu>
+            <dnameO>Example</dnameO>
+            <dnameL>Example</dnameL>
+            <dnameSt>Example</dnameSt>
+            <dnameC>US</dnameC>
+            <keystoreConfig>
+              <delete>true</delete>
+              <gen>true</gen>
+            </keystoreConfig>
+          </sign>
+          <pack200>
+            <enabled>true</enabled>
+          </pack200>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>
