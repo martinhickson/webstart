@@ -31,7 +31,7 @@ Add the plugin to your `pom.xml` and bind the `jnlp-inline` goal (simplest path 
 <build>
   <plugins>
     <plugin>
-      <groupId>org.codehaus.mojo</groupId>
+      <groupId>io.github.martinhickson</groupId>
       <artifactId>webstart-maven-plugin</artifactId>
       <version>1.0.7-bravura</version>
       <executions>
@@ -212,7 +212,7 @@ Service-principal authentication with secrets supplied from the environment (rec
       </plugin>
 
       <plugin>
-        <groupId>org.codehaus.mojo</groupId>
+        <groupId>io.github.martinhickson</groupId>
         <artifactId>webstart-maven-plugin</artifactId>
         <version>${webstart.plugin.version}</version>
         <executions>

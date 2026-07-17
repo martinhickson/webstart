@@ -144,7 +144,7 @@ jobs:
             Install with:
             ```xml
             <plugin>
-              <groupId>org.codehaus.mojo</groupId>
+              <groupId>io.github.martinhickson</groupId>
               <artifactId>webstart-maven-plugin</artifactId>
               <version>${{ env.RELEASE_VERSION }}</version>
             </plugin>
