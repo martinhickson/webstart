@@ -9,7 +9,7 @@ Build, sign, and package **Java Web Start** applications with Maven. This plugin
 
 Actively maintained for modern JDKs, cloud code signing, and current enterprise use.
 
-See [CHANGELOG.md](CHANGELOG.md) for release history.
+See [CHANGELOG.md](CHANGELOG.md) for release history and [CONTRIBUTING.md](CONTRIBUTING.md) for development setup.
 
 **Latest release:** [`1.2.4-bravura`](https://github.com/martinhickson/webstart/releases/tag/v1.2.4-bravura-release) · **Default branch:** `main` · **Maven Central:** `io.github.martinhickson:webstart-maven-plugin:1.2.4-bravura`
 
@@ -398,7 +398,7 @@ mvn clean install
 mvn verify -pl webstart-maven-plugin
 ```
 
-JaCoCo reports are generated under `webstart-maven-plugin/target/site/jacoco/` (module) and `target/site/jacoco-aggregate/` (reactor root).
+JaCoCo reports are generated under `webstart-maven-plugin/target/site/jacoco/` (module) and `target/site/jacoco-aggregate/` (reactor root). Coverage thresholds apply to core library code (Mojo entry points are excluded and exercised via `webstart-it`).
 
 Push and pull request builds run unit tests, JaCoCo checks, servlet ITs, and the `webstart-it` end-to-end harness via GitHub Actions (see `.github/workflows/ci.yml`).
 
@@ -442,7 +442,7 @@ The workflow creates branch `v{version}`, tag `v{version}-release`, publishes to
 - Azure KeyVault JCA and hardware key signing improvements
 - Maven Central publishing under `io.github.martinhickson`
 - `webstart-jnlp-servlet` migrated to Jakarta Servlet 6 (Jakarta EE 10)
-- Unit tests (77+) with JaCoCo coverage; servlet ITs via Undertow (`-Pintegration-test`)
+- Unit tests (100+) with JaCoCo coverage thresholds; servlet ITs via Undertow (`-Pintegration-test`)
 - CI on push/PR; manual release workflow and standalone `webstart-it` plugin harness
 
 ---

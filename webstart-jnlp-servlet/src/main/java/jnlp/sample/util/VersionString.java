@@ -54,7 +54,7 @@ public class VersionString
     /**
      * Constructs a VersionString object from string
      *
-     * @param vs TODO
+     * @param vs space-separated JNLP version string
      */
     public VersionString( String vs )
     {
@@ -73,8 +73,8 @@ public class VersionString
     /**
      * Check if this VersionString object contains the VersionID m
      *
-     * @param m TODO
-     * @return TODO
+     * @param m version identifier to look for
+     * @return {@code true} if this version string contains a matching identifier
      */
     public boolean contains( VersionID m )
     {
@@ -93,8 +93,8 @@ public class VersionString
     /**
      * Check if this VersionString object contains the VersionID m, given as a string
      *
-     * @param versionid TODO
-     * @return TODO
+     * @param versionid version string to look for
+     * @return {@code true} if this version string contains a matching identifier
      */
     public boolean contains( String versionid )
     {
@@ -104,8 +104,8 @@ public class VersionString
     /**
      * Check if this VersionString object contains anything greater than m
      *
-     * @param m TODO
-     * @return TODO
+     * @param m minimum version identifier
+     * @return {@code true} if any contained identifier is greater than {@code m}
      */
     public boolean containsGreaterThan( VersionID m )
     {
@@ -124,8 +124,8 @@ public class VersionString
     /**
      * Check if this VersionString object contains anything greater than the VersionID m, given as a string
      *
-     * @param versionid TODO
-     * @return TODO
+     * @param versionid minimum version string
+     * @return {@code true} if any contained identifier is greater than {@code versionid}
      */
     public boolean containsGreaterThan( String versionid )
     {
@@ -135,9 +135,9 @@ public class VersionString
     /**
      * Check if the versionString 'vs' contains the VersionID 'vi'
      *
-     * @param vi TODO
-     * @param vs TODO
-     * @return TODO
+     * @param vs space-separated version string to search
+     * @param vi version identifier to find
+     * @return {@code true} if {@code vs} contains {@code vi}
      */
     static public boolean contains( String vs, String vi )
     {

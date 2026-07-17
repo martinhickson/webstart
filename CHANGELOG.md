@@ -11,6 +11,8 @@ where practical for `-bravura` maintenance releases.
 ### Added
 
 - GitHub Actions CI on push and pull requests (unit tests, JaCoCo, servlet ITs, and `webstart-it`)
+- `CONTRIBUTING.md`, Dependabot for GitHub Actions, and JaCoCo artifacts in CI
+- Expanded unit tests for config beans, dependency tasks, generator configs, and servlet `VersionID`/`VersionString`
 - JaCoCo code coverage reporting and minimum thresholds on `webstart-maven-plugin`
 - 77+ unit tests covering Pack200, dependency handling, utilities, and build reporting
 - `webstart-jnlp-servlet-it` module with Undertow-based Failsafe integration tests

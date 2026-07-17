@@ -28,3 +28,13 @@ jobs:
 
       - name: Verify webstart-it (end-to-end plugin)
         run: mvn --errors --batch-mode -ntp verify -f webstart-it/pom.xml
+
+      - name: Upload JaCoCo report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-report
+          path: |
+            webstart-maven-plugin/target/site/jacoco/
+            target/site/jacoco-aggregate/
+          if-no-files-found: ignore

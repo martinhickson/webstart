@@ -285,12 +285,42 @@
                     <limit>
                       <counter>INSTRUCTION</counter>
                       <value>COVEREDRATIO</value>
-                      <minimum>0.25</minimum>
+                      <minimum>0.45</minimum>
                     </limit>
                     <limit>
                       <counter>CLASS</counter>
                       <value>COVEREDRATIO</value>
-                      <minimum>0.40</minimum>
+                      <minimum>0.55</minimum>
+                    </limit>
+                  </limits>
+                </rule>
+                <rule>
+                  <element>PACKAGE</element>
+                  <includes>
+                    <include>org.codehaus.mojo.webstart.util</include>
+                    <include>org.codehaus.mojo.webstart.dependency.filenaming</include>
+                    <include>org.codehaus.mojo.webstart.pack200</include>
+                  </includes>
+                  <limits>
+                    <limit>
+                      <counter>INSTRUCTION</counter>
+                      <value>COVEREDRATIO</value>
+                      <minimum>0.45</minimum>
+                    </limit>
+                  </limits>
+                </rule>
+                <rule>
+                  <element>PACKAGE</element>
+                  <includes>
+                    <include>org.codehaus.mojo.webstart.dependency</include>
+                    <include>org.codehaus.mojo.webstart.generator</include>
+                    <include>org.codehaus.mojo.webstart.sign</include>
+                  </includes>
+                  <limits>
+                    <limit>
+                      <counter>INSTRUCTION</counter>
+                      <value>COVEREDRATIO</value>
+                      <minimum>0.35</minimum>
                     </limit>
                   </limits>
                 </rule>
@@ -302,6 +332,9 @@
           <skip>${skipTests}</skip>
           <excludes>
             <exclude>**/HelpMojo.class</exclude>
+            <exclude>**/*Mojo.class</exclude>
+            <exclude>**/AbstractBaseJnlpMojo.class</exclude>
+            <exclude>**/AbstractJnlpMojo.class</exclude>
           </excludes>
         </configuration>
       </plugin>

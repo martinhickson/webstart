@@ -62,7 +62,7 @@ public class VersionID
     /**
      * Creates a VersionID object
      *
-     * @param str TODO
+     * @param str JNLP version string to parse (may use {@code +}, {@code *}, or {@code &} operators)
      */
     public VersionID( String str )
     {
@@ -138,8 +138,8 @@ public class VersionID
      * prefix match of an exact match should be performed
      * if _isCompound, must match _rest also.
      *
-     * @param vid TODO
-     * @return TODO
+     * @param vid version to match against this identifier
+     * @return {@code true} if the given version satisfies this identifier
      */
     public boolean match( VersionID vid )
     {
@@ -158,8 +158,8 @@ public class VersionID
     /**
      * Compares if two version IDs are equal
      *
-     * @param o TODO
-     * @return TODO
+     * @param o object to compare (expected to be a {@link VersionID})
+     * @return {@code true} if both identifiers represent the same version constraint
      */
     public boolean equals( Object o )
     {
@@ -180,8 +180,8 @@ public class VersionID
     /**
      * Compares if two version IDs are equal
      *
-     * @param o TODO
-     * @return TODO
+     * @param o object to compare (expected to be a {@link VersionID})
+     * @return {@code true} if both identifiers represent the same version constraint
      */
     private boolean matchTuple( Object o )
     {
@@ -236,9 +236,9 @@ public class VersionID
     /**
      * Compares if 'this' is greater than vid
      *
-     * @param vid        TODO
-     * @param allowEqual TODO
-     * @return TODO
+     * @param vid        version to compare against
+     * @param allowEqual whether equality satisfies the comparison
+     * @return {@code true} if this identifier is greater than (or equal to) {@code vid}
      */
     private boolean isGreaterThanOrEqualHelper( VersionID vid, boolean allowEqual )
     {
@@ -285,8 +285,8 @@ public class VersionID
     /**
      * Checks if 'this' is a prefix of vid
      *
-     * @param vid TODO
-     * @return TODO
+     * @param vid candidate version
+     * @return {@code true} if {@code vid} starts with this prefix identifier
      */
     public boolean isPrefixMatch( VersionID vid )
     {
@@ -321,9 +321,9 @@ public class VersionID
     /**
      * Normalize an array to a certain length
      *
-     * @param list      TODO
-     * @param minlength TODO
-     * @return TODO
+     * @param list      version tuple elements
+     * @param minlength minimum number of tuple elements
+     * @return normalized tuple padded to {@code minlength}
      */
     private String[] normalize( String[] list, int minlength )
     {
