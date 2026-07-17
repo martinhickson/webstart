@@ -1,5 +1,6 @@
 # A WebStart Plugin for Maven
 
+[![CI](https://github.com/martinhickson/webstart/actions/workflows/ci.yml/badge.svg)](https://github.com/martinhickson/webstart/actions/workflows/ci.yml)
 [![Integration Test](https://github.com/martinhickson/webstart/actions/workflows/integration-test.yml/badge.svg)](https://github.com/martinhickson/webstart/actions/workflows/integration-test.yml)
 [![Release](https://github.com/martinhickson/webstart/actions/workflows/release.yml/badge.svg)](https://github.com/martinhickson/webstart/actions/workflows/release.yml)
 [![MIT Licence](https://img.shields.io/github/license/martinhickson/webstart.svg?label=License)](http://opensource.org/licenses/MIT)
@@ -8,7 +9,9 @@ Build, sign, and package **Java Web Start** applications with Maven. This plugin
 
 Actively maintained for modern JDKs, cloud code signing, and current enterprise use.
 
-**Latest release:** [`1.2.1-bravura`](https://github.com/martinhickson/webstart/releases/tag/v1.2.1-bravura-release) · **Default branch:** `main` · **Maven Central:** `io.github.martinhickson:webstart-maven-plugin:1.2.1-bravura`
+See [CHANGELOG.md](CHANGELOG.md) for release history.
+
+**Latest release:** [`1.2.4-bravura`](https://github.com/martinhickson/webstart/releases/tag/v1.2.4-bravura-release) · **Default branch:** `main` · **Maven Central:** `io.github.martinhickson:webstart-maven-plugin:1.2.4-bravura`
 
 ---
 
@@ -33,7 +36,7 @@ Add the plugin to your `pom.xml` and bind the `jnlp-inline` goal (simplest path 
     <plugin>
       <groupId>io.github.martinhickson</groupId>
       <artifactId>webstart-maven-plugin</artifactId>
-      <version>1.2.1-bravura</version>
+      <version>1.2.4-bravura</version>
       <executions>
         <execution>
           <phase>package</phase>
@@ -174,7 +177,7 @@ Service-principal authentication with secrets supplied from the environment (rec
     <azure.keyvault.cert-name>my-code-signing-cert</azure.keyvault.cert-name>
     <azure.jca.version>2.11.0</azure.jca.version>
     <azure.jca.jar.path>${project.build.directory}/jca/azure-security-keyvault-jca-${azure.jca.version}.jar</azure.jca.jar.path>
-    <webstart.plugin.version>1.2.1-bravura</webstart.plugin.version>
+    <webstart.plugin.version>1.2.4-bravura</webstart.plugin.version>
   </properties>
 
   <dependencies>
@@ -341,7 +344,7 @@ jarsigner \
 | Certificate chain warnings from `jarsigner` | Provide `<certchain>` with a PEM file containing the full chain from your CA |
 | `Could not obtain key store location` | Use `<keystore>NONE</keystore>` for Azure Key Vault (not a file path) |
 | Provider / module errors on JDK 11+ | Ensure `-J--module-path` and `-J--add-modules=com.azure.security.keyvault.jca` point at the copied JCA JAR |
-| Custom `-J` arguments ignored | Upgrade to `1.2.1-bravura` or later — POM-configured arguments are preserved through signing |
+| Custom `-J` arguments ignored | Upgrade to `1.2.4-bravura` or later — POM-configured arguments are preserved through signing |
 | Auth failures in CI | Confirm Key Vault RBAC/access policy for the service principal or managed identity used by the agent |
 
 ---
@@ -397,6 +400,8 @@ mvn verify -pl webstart-maven-plugin
 
 JaCoCo reports are generated under `webstart-maven-plugin/target/site/jacoco/` (module) and `target/site/jacoco-aggregate/` (reactor root).
 
+Push and pull request builds run unit tests, JaCoCo checks, servlet ITs, and the `webstart-it` end-to-end harness via GitHub Actions (see `.github/workflows/ci.yml`).
+
 ### Servlet integration tests (Undertow)
 
 The `webstart-jnlp-servlet-it` module deploys `JnlpDownloadServlet` on Undertow with Jakarta Servlet 6. It is only built when the `integration-test` profile is active:
@@ -421,9 +426,9 @@ Releases are triggered manually from **Actions → Release → Run workflow**.
 
 | Input | Example | Description |
 |-------|---------|-------------|
-| `release_version` | `1.2.1-bravura` | Version applied to all POMs |
-| `skipTests` | `true` | Skip unit tests during build and deploy |
-| `run_integration_tests` | `false` | Run `webstart-it` before tagging |
+| `release_version` | `1.2.4-bravura` | Version applied to all POMs |
+| `skipTests` | `false` | Skip unit tests during build and deploy |
+| `run_integration_tests` | `true` | Run `webstart-it` before tagging |
 | `deploy_to_maven_central` | `false` | Also publish to Maven Central (optional) |
 
 The workflow creates branch `v{version}`, tag `v{version}-release`, publishes to GitHub Packages, optionally to Maven Central, and opens a GitHub Release.
@@ -438,7 +443,7 @@ The workflow creates branch `v{version}`, tag `v{version}-release`, publishes to
 - Maven Central publishing under `io.github.martinhickson`
 - `webstart-jnlp-servlet` migrated to Jakarta Servlet 6 (Jakarta EE 10)
 - Unit tests (77+) with JaCoCo coverage; servlet ITs via Undertow (`-Pintegration-test`)
-- Manual release workflow and standalone `webstart-it` plugin harness
+- CI on push/PR; manual release workflow and standalone `webstart-it` plugin harness
 
 ---
 

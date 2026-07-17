@@ -22,7 +22,7 @@ mvn clean verify -f webstart-it/pom.xml
 Override the plugin version if needed:
 
 ```bash
-mvn clean verify -f webstart-it/pom.xml -Dwebstart.plugin.version=1.0.7-bravura
+mvn clean verify -f webstart-it/pom.xml -Dwebstart.plugin.version=1.2.4-bravura
 ```
 
 ## What it verifies

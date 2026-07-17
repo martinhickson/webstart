@@ -20,8 +20,8 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Install project
-        run: mvn --show-version --errors --batch-mode -ntp clean install -DskipTests
+      - name: Install project (with tests)
+        run: mvn --show-version --errors --batch-mode -ntp clean install
 
       - name: Verify installed plugin contains build report
         run: |

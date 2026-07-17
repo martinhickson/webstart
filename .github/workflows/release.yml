@@ -4,19 +4,19 @@ on:
   workflow_dispatch:
     inputs:
       release_version:
-        description: 'Release version (e.g., 1.0.7-bravura)'
+        description: 'Release version (e.g., 1.2.4-bravura)'
         required: true
-        default: '1.0.7-bravura'
+        default: '1.2.4-bravura'
         type: string
       skipTests:
         description: 'Skip unit tests during build and deploy'
         required: false
-        default: true
+        default: false
         type: boolean
       run_integration_tests:
         description: 'Run webstart-it integration project before tagging'
         required: false
-        default: false
+        default: true
         type: boolean
       deploy_to_maven_central:
         description: 'Also publish to Maven Central'
