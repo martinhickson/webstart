@@ -23,8 +23,8 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Verify reactor (unit tests, JaCoCo, servlet ITs)
-        run: mvn --show-version --errors --batch-mode -ntp verify -Pintegration-test
+      - name: Install reactor (unit tests, JaCoCo, servlet ITs)
+        run: mvn --show-version --errors --batch-mode -ntp install -Pintegration-test
 
       - name: Verify webstart-it (end-to-end plugin)
         run: mvn --errors --batch-mode -ntp verify -f webstart-it/pom.xml
