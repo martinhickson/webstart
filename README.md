@@ -31,7 +31,7 @@ Add the plugin to your `pom.xml` and bind the `jnlp-inline` goal (simplest path 
 <build>
   <plugins>
     <plugin>
-      <groupId>org.codehaus.mojo</groupId>
+      <groupId>io.github.martinhickson</groupId>
       <artifactId>webstart-maven-plugin</artifactId>
       <version>1.0.7-bravura</version>
       <executions>
@@ -212,7 +212,7 @@ Service-principal authentication with secrets supplied from the environment (rec
       </plugin>
 
       <plugin>
-        <groupId>org.codehaus.mojo</groupId>
+        <groupId>io.github.martinhickson</groupId>
         <artifactId>webstart-maven-plugin</artifactId>
         <version>${webstart.plugin.version}</version>
         <executions>
@@ -405,6 +405,7 @@ Releases are triggered manually from **Actions → Release → Run workflow**.
 | `release_version` | `1.0.7-bravura` | Version applied to all POMs |
 | `skipTests` | `true` | Skip unit tests during build and deploy |
 | `run_integration_tests` | `false` | Run `webstart-it` before tagging |
+| `deploy_to_maven_central` | `false` | Also publish to Maven Central (optional) |
 
 The workflow creates branch `v{version}`, tag `v{version}-release`, publishes to GitHub Packages, and opens a GitHub Release.
 
