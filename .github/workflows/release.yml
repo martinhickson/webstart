@@ -18,6 +18,11 @@ on:
         required: false
         default: false
         type: boolean
+      deploy_to_maven_central:
+        description: 'Also publish to Maven Central'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -119,6 +124,76 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Validate Maven Central configuration
+        if: ${{ github.event.inputs.deploy_to_maven_central == 'true' }}
+        env:
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          MAVEN_CENTRAL_GPG_PRIVATE_KEY: ${{ secrets.MAVEN_CENTRAL_GPG_PRIVATE_KEY }}
+        run: |
+          if [ -z "$MAVEN_CENTRAL_USERNAME" ] || [ -z "$MAVEN_CENTRAL_PASSWORD" ] || [ -z "$MAVEN_CENTRAL_GPG_PRIVATE_KEY" ]; then
+            echo "::error::Maven Central publishing is not configured for this repository."
+            exit 1
+          fi
+
+      - name: Configure Maven Central credentials
+        if: ${{ github.event.inputs.deploy_to_maven_central == 'true' }}
+        env:
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+        run: |
+          sed -i "/<\/servers>/i\\
+              <server>\\
+                <id>central</id>\\
+                <username>${MAVEN_CENTRAL_USERNAME}</username>\\
+                <password>${MAVEN_CENTRAL_PASSWORD}</password>\\
+              </server>" ~/.m2/settings.xml
+
+      - name: Import GPG signing key
+        if: ${{ github.event.inputs.deploy_to_maven_central == 'true' }}
+        env:
+          MAVEN_CENTRAL_GPG_PRIVATE_KEY: ${{ secrets.MAVEN_CENTRAL_GPG_PRIVATE_KEY }}
+        run: |
+          echo "${MAVEN_CENTRAL_GPG_PRIVATE_KEY}" | gpg --batch --import --pinentry-mode loopback
+
+      - name: Prepare POMs for Maven Central
+        if: ${{ github.event.inputs.deploy_to_maven_central == 'true' }}
+        run: |
+          mvn -ntp versions:set-scm-tag -DnewScmTagName="${TAG_NAME}" -DgenerateBackupPoms=false
+
+      - name: Publish to Maven Central
+        if: ${{ github.event.inputs.deploy_to_maven_central == 'true' }}
+        run: |
+          mvn deploy -ntp -Pcentral-release -DskipTests=${{ github.event.inputs.skipTests }} \
+            -Dgpg.passphrase="${MAVEN_CENTRAL_GPG_PASSPHRASE}"
+        env:
+          MAVEN_CENTRAL_GPG_PASSPHRASE: ${{ secrets.MAVEN_CENTRAL_GPG_PASSPHRASE }}
+
+      - name: Prepare GitHub release notes
+        run: |
+          {
+            echo "RELEASE_BODY<<EOF"
+            echo "Release ${RELEASE_VERSION}"
+            echo ""
+            echo "This release includes:"
+            echo "- Maven artifacts published to GitHub Packages"
+            if [ "${{ github.event.inputs.deploy_to_maven_central }}" = "true" ]; then
+              echo "- Maven artifacts published to Maven Central"
+            fi
+            echo "- Release branch: ${BRANCH_NAME}"
+            echo "- Tag: ${TAG_NAME}"
+            echo ""
+            echo "Install with:"
+            echo '```xml'
+            echo "<plugin>"
+            echo "  <groupId>io.github.martinhickson</groupId>"
+            echo "  <artifactId>webstart-maven-plugin</artifactId>"
+            echo "  <version>${RELEASE_VERSION}</version>"
+            echo "</plugin>"
+            echo '```'
+            echo "EOF"
+          } >> "${GITHUB_ENV}"
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -133,22 +208,7 @@ jobs:
         with:
           tag_name: ${{ env.TAG_NAME }}
           name: Release ${{ env.RELEASE_VERSION }}
-          body: |
-            Release ${{ env.RELEASE_VERSION }}
-
-            This release includes:
-            - Maven artifacts published to GitHub Packages
-            - Release branch: ${{ env.BRANCH_NAME }}
-            - Tag: ${{ env.TAG_NAME }}
-
-            Install with:
-            ```xml
-            <plugin>
-              <groupId>org.codehaus.mojo</groupId>
-              <artifactId>webstart-maven-plugin</artifactId>
-              <version>${{ env.RELEASE_VERSION }}</version>
-            </plugin>
-            ```
+          body: ${{ env.RELEASE_BODY }}
           draft: false
           prerelease: false
           files: |

@@ -3,7 +3,7 @@
   <modelVersion>4.0.0</modelVersion>
 
   <parent>
-    <groupId>org.codehaus.mojo</groupId>
+    <groupId>io.github.martinhickson</groupId>
     <artifactId>webstart</artifactId>
     <version>1.0.1-bravura-SNAPSHOT</version>
   </parent>
