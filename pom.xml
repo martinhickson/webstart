@@ -10,7 +10,7 @@
 
   <groupId>io.github.martinhickson</groupId>
   <artifactId>webstart</artifactId>
-  <version>1.0.1-bravura-SNAPSHOT</version>
+  <version>1.0.8-bravura</version>
   <packaging>pom</packaging>
 
   <name>MWEBSTART :: Project</name>
