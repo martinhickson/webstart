@@ -39,7 +39,7 @@ package jnlp.sample.servlet;
 import jnlp.sample.jardiff.JarDiff;
 import jnlp.sample.util.VersionString;
 
-import javax.servlet.ServletContext;
+import jakarta.servlet.ServletContext;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.File;
@@ -384,7 +384,7 @@ public class JarDiffHandler
 
         URL fileURL = _servletContext.getResource( path );
 
-        File tempDir = (File) _servletContext.getAttribute( "javax.servlet.context.tempdir" );
+        File tempDir = (File) _servletContext.getAttribute( "jakarta.servlet.context.tempdir" );
 
         // download file into temp dir
         if ( fileURL != null )
@@ -441,9 +441,9 @@ public class JarDiffHandler
             }
 
             // Create temp. file to store JarDiff file in
-            File tempDir = (File) _servletContext.getAttribute( "javax.servlet.context.tempdir" );
+            File tempDir = (File) _servletContext.getAttribute( "jakarta.servlet.context.tempdir" );
 
-            // fix for 4653036: JarDiffHandler() should use javax.servlet.context.tempdir to store the jardiff
+            // fix for 4653036: JarDiffHandler() should use jakarta.servlet.context.tempdir to store the jardiff
             File outputFile = File.createTempFile( "jnlp", ".jardiff", tempDir );
 
             _log.addDebug(

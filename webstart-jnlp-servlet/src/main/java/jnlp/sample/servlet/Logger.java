@@ -36,8 +36,8 @@
 
 package jnlp.sample.servlet;
 
-import javax.servlet.ServletConfig;
-import javax.servlet.ServletContext;
+import jakarta.servlet.ServletConfig;
+import jakarta.servlet.ServletContext;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;

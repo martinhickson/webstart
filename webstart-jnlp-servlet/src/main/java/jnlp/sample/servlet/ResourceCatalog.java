@@ -41,7 +41,7 @@ import jnlp.sample.util.VersionString;
 import org.w3c.dom.Document;
 import org.xml.sax.SAXParseException;
 
-import javax.servlet.ServletContext;
+import jakarta.servlet.ServletContext;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.BufferedInputStream;

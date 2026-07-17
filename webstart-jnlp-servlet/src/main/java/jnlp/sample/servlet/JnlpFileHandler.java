@@ -41,9 +41,8 @@ import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
-import javax.servlet.ServletContext;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpUtils;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.http.HttpServletRequest;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.Transformer;
@@ -136,7 +135,7 @@ public class JnlpFileHandler
 
         // fix for 4474854:  use the request URL as key to look up jnlp file
         // in hash map
-        String reqUrl = HttpUtils.getRequestURL( dreq.getHttpRequest() ).toString();
+        String reqUrl = dreq.getHttpRequest().getRequestURL().toString();
 
         // Check if entry already exist in HashMap
         JnlpFileEntry jnlpFile = (JnlpFileEntry) _jnlpFiles.get( reqUrl );
@@ -206,7 +205,7 @@ public class JnlpFileHandler
 
         // fix for 4474854:  use the request URL as key to look up jnlp file
         // in hash map
-        String reqUrl = HttpUtils.getRequestURL( dreq.getHttpRequest() ).toString();
+        String reqUrl = dreq.getHttpRequest().getRequestURL().toString();
         // SQE: To support query string, we changed the hash key from Request URL to (Request URL + query string)
         if ( dreq.getQuery() != null )
         {

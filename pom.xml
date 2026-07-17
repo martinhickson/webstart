@@ -115,6 +115,9 @@
     <!-- all modules shares the same version in our projects -->
     <autoVersionSubmodules>true</autoVersionSubmodules>
     <central.publishing.plugin.version>0.9.0</central.publishing.plugin.version>
+    <jacoco.version>0.8.12</jacoco.version>
+    <jakarta.servlet.version>6.0.0</jakarta.servlet.version>
+    <undertow.version>2.3.18.Final</undertow.version>
   </properties>
 
   <dependencyManagement>
@@ -264,9 +267,20 @@
       </dependency>
 
       <dependency>
-        <groupId>javax.servlet</groupId>
-        <artifactId>servlet-api</artifactId>
-        <version>2.3</version>
+        <groupId>jakarta.servlet</groupId>
+        <artifactId>jakarta.servlet-api</artifactId>
+        <version>${jakarta.servlet.version}</version>
+      </dependency>
+
+      <dependency>
+        <groupId>io.undertow</groupId>
+        <artifactId>undertow-core</artifactId>
+        <version>${undertow.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.undertow</groupId>
+        <artifactId>undertow-servlet</artifactId>
+        <version>${undertow.version}</version>
       </dependency>
 
       <dependency>
@@ -374,9 +388,30 @@
             <content>${project.build.directory}/staging/${project.artifactId}</content>
           </configuration>
         </plugin>
+        <plugin>
+          <groupId>org.jacoco</groupId>
+          <artifactId>jacoco-maven-plugin</artifactId>
+          <version>${jacoco.version}</version>
+        </plugin>
       </plugins>
     </pluginManagement>
     <plugins>
+      <plugin>
+        <groupId>org.jacoco</groupId>
+        <artifactId>jacoco-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>report-aggregate</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>report-aggregate</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <skip>${skipTests}</skip>
+        </configuration>
+      </plugin>
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>animal-sniffer-maven-plugin</artifactId>
@@ -468,6 +503,12 @@
           </plugin>
         </plugins>
       </build>
+    </profile>
+    <profile>
+      <id>integration-test</id>
+      <modules>
+        <module>webstart-jnlp-servlet-it</module>
+      </modules>
     </profile>
   </profiles>
 </project>

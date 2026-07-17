@@ -19,7 +19,7 @@ Actively maintained for modern JDKs, cloud code signing, and current enterprise 
 | **JNLP generation** | Produce `launch.jnlp` (and related files) from your project and dependencies |
 | **JAR signing** | Sign application and dependency JARs; supports hardware keys and Azure KeyVault JCA |
 | **Pack200** | Optional compression for legacy Web Start deployments; graceful fallback on modern JDKs |
-| **Servlet support** | `webstart-jnlp-servlet` module for Pack200-aware JNLP download serving |
+| **Servlet support** | `webstart-jnlp-servlet` module (Jakarta Servlet 6 / EE 10) for Pack200-aware JNLP download serving |
 
 ---
 
@@ -369,9 +369,10 @@ Deploy JNLP applications with [IcedTea-Web](https://github.com/martinhickson/Ice
 
 ```
 webstart/
-├── webstart-maven-plugin/    # The Maven plugin
-├── webstart-jnlp-servlet/    # JNLP download servlet library
-└── webstart-it/              # Standalone JDK 21 integration test (not in reactor)
+├── webstart-maven-plugin/       # The Maven plugin
+├── webstart-jnlp-servlet/       # JNLP download servlet (Jakarta EE 10)
+├── webstart-jnlp-servlet-it/    # Servlet ITs (Undertow; profile integration-test)
+└── webstart-it/                 # Standalone plugin IT (not in reactor)
 ```
 
 ---
@@ -388,7 +389,23 @@ git checkout main
 mvn clean install
 ```
 
-### JDK 21 integration test
+### Unit tests and code coverage
+
+```bash
+mvn verify -pl webstart-maven-plugin
+```
+
+JaCoCo reports are generated under `webstart-maven-plugin/target/site/jacoco/` (module) and `target/site/jacoco-aggregate/` (reactor root).
+
+### Servlet integration tests (Undertow)
+
+The `webstart-jnlp-servlet-it` module deploys `JnlpDownloadServlet` on Undertow with Jakarta Servlet 6. It is only built when the `integration-test` profile is active:
+
+```bash
+mvn verify -Pintegration-test
+```
+
+### Plugin integration test (JDK 21)
 
 ```bash
 mvn clean verify -f webstart-it/pom.xml
@@ -419,7 +436,9 @@ The workflow creates branch `v{version}`, tag `v{version}-release`, publishes to
 - Pack200 graceful degradation and Commons Compress path
 - Azure KeyVault JCA and hardware key signing improvements
 - Maven Central publishing under `io.github.martinhickson`
-- Manual release workflow, unit test suite, and `webstart-it` integration harness
+- `webstart-jnlp-servlet` migrated to Jakarta Servlet 6 (Jakarta EE 10)
+- Unit tests (77+) with JaCoCo coverage; servlet ITs via Undertow (`-Pintegration-test`)
+- Manual release workflow and standalone `webstart-it` plugin harness
 
 ---
 

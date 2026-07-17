@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jnlp spec="1.0+" codebase="$$codebase" href="launch.jnlp">
+  <information>
+    <title>WebStart Servlet IT</title>
+    <vendor>Example</vendor>
+  </information>
+  <resources>
+    <j2se version="11+"/>
+  </resources>
+  <application-desc main-class="example.Main"/>
+</jnlp>

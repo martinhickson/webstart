@@ -11,17 +11,8 @@
   <artifactId>webstart-jnlp-servlet</artifactId>
 
   <name>MWEBSTART :: JNLP Servlet</name>
-  <!--<version>1.0-7.0.02_ea_b02.2-SNAPSHOT</version>-->
-  <description>JNLP Sample servlet that supports pack200 protocol. Taken from Sun's JDK sample/jnlp directory thanks to
-    its permissive license.
-  </description>
-  <url>http:///jdk6.dev.java.net/</url>
-  <!--scm> available in source package inside a mustang snapshot.
-    <connection />
-    <developerConnection />
-    <tag />
-    <url />
-  </scm-->
+  <description>JNLP download servlet with Pack200 support, targeting Jakarta Servlet 6 (Jakarta EE 10).</description>
+  <url>https://github.com/martinhickson/webstart</url>
   <organization>
     <name>Sun Microsystems</name>
     <url>http://www.sun.com</url>
@@ -36,10 +27,9 @@
   </licenses>
 
   <dependencies>
-
     <dependency>
-      <groupId>javax.servlet</groupId>
-      <artifactId>servlet-api</artifactId>
+      <groupId>jakarta.servlet</groupId>
+      <artifactId>jakarta.servlet-api</artifactId>
       <scope>provided</scope>
     </dependency>
   </dependencies>
