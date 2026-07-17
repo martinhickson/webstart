@@ -32,4 +32,37 @@ public class Pack200SupportTest
             assertFalse( jdkAvailable );
         }
     }
+
+    public void testRuntimeUnavailableWhenCommonsCompressDisabledAndJdkMissing()
+    {
+        if ( !Pack200Support.isJdkPack200Available() )
+        {
+            assertFalse( Pack200Support.isRuntimeAvailable( false ) );
+        }
+    }
+
+    public void testPackWithJdkThrowsWhenUnavailable()
+            throws Exception
+    {
+        if ( Pack200Support.isJdkPack200Available() )
+        {
+            return;
+        }
+
+        try
+        {
+            Pack200Support.packWithJdk( null, null, null );
+            fail( "Expected IOException when JDK Pack200 is unavailable" );
+        }
+        catch ( java.io.IOException e )
+        {
+            assertTrue( e.getMessage().contains( "JDK Pack200 API is not available" ) );
+        }
+    }
+
+    public void testConstantsAreStable()
+    {
+        assertEquals( "pack.segment.limit", Pack200Support.SEGMENT_LIMIT );
+        assertEquals( "pass.file.", Pack200Support.PASS_FILE_PFX );
+    }
 }

@@ -44,6 +44,39 @@ public class BuildReportTest
         assertTrue( containsLine( lines, "signature: unsigned" ) || containsLine( lines, "SHA-256 fingerprint:" ) );
     }
 
+    public void testWorkDirectorySummaryReturnsEmptyForNullDirectory()
+    {
+        assertTrue( BuildReport.workDirectorySummaryLines( null ).isEmpty() );
+    }
+
+    public void testWorkDirectorySummaryHandlesEmptyDirectory()
+            throws Exception
+    {
+        File workDir = createTempDir( "webstart-report-empty-" );
+
+        List<String> lines = BuildReport.workDirectorySummaryLines( workDir );
+        assertTrue( containsLine( lines, "Build summary" ) );
+        assertTrue( containsLine( lines, "Signed JAR artifacts: (none)" ) );
+        assertFalse( containsLine( lines, "JNLP descriptors:" ) );
+    }
+
+    public void testSignedJarLinesReportNoneWhenDirectoryHasNoJars()
+            throws Exception
+    {
+        File workDir = createTempDir( "webstart-report-nojars-" );
+        writeBytes( new File( workDir, "launch.jnlp" ), "<jnlp/>".getBytes( "UTF-8" ) );
+
+        List<String> lines = BuildReport.signedJarLines( workDir );
+        assertEquals( 1, lines.size() );
+        assertEquals( "Signed JAR artifacts: (none)", lines.get( 0 ) );
+    }
+
+    public void testDistributionArchiveLinesReturnEmptyForMissingFile()
+    {
+        File missing = new File( System.getProperty( "java.io.tmpdir" ), "webstart-report-missing-" + System.nanoTime() );
+        assertTrue( BuildReport.distributionArchiveLines( missing ).isEmpty() );
+    }
+
     public void testDistributionArchiveLinesListZipEntries()
             throws Exception
     {

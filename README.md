@@ -8,7 +8,7 @@ Build, sign, and package **Java Web Start** applications with Maven. This plugin
 
 Actively maintained for modern JDKs, cloud code signing, and current enterprise use.
 
-**Latest release:** [`1.0.7-bravura`](https://github.com/martinhickson/webstart/releases/tag/v1.0.7-bravura-release) · **Default branch:** `main`
+**Latest release:** [`1.2.1-bravura`](https://github.com/martinhickson/webstart/releases/tag/v1.2.1-bravura-release) · **Default branch:** `main` · **Maven Central:** `io.github.martinhickson:webstart-maven-plugin:1.2.1-bravura`
 
 ---
 
@@ -33,7 +33,7 @@ Add the plugin to your `pom.xml` and bind the `jnlp-inline` goal (simplest path 
     <plugin>
       <groupId>io.github.martinhickson</groupId>
       <artifactId>webstart-maven-plugin</artifactId>
-      <version>1.0.7-bravura</version>
+      <version>1.2.1-bravura</version>
       <executions>
         <execution>
           <phase>package</phase>
@@ -61,9 +61,11 @@ mvn clean package
 
 Output lands under `target/jnlp/` — including `launch.jnlp`, signed JARs, and a distributable ZIP.
 
+Released versions are published to **[Maven Central](https://central.sonatype.com/artifact/io.github.martinhickson/webstart-maven-plugin)** — no extra `<repository>` configuration is required.
+
 ### Installing from GitHub Packages
 
-Released artifacts are published to GitHub Packages. Add the repository and authenticate with a GitHub personal access token (`read:packages`):
+GitHub Packages is also available if you prefer to resolve from GitHub. Add the repository and authenticate with a GitHub personal access token (`read:packages`):
 
 ```xml
 <repositories>
@@ -172,7 +174,7 @@ Service-principal authentication with secrets supplied from the environment (rec
     <azure.keyvault.cert-name>my-code-signing-cert</azure.keyvault.cert-name>
     <azure.jca.version>2.11.0</azure.jca.version>
     <azure.jca.jar.path>${project.build.directory}/jca/azure-security-keyvault-jca-${azure.jca.version}.jar</azure.jca.jar.path>
-    <webstart.plugin.version>1.0.7-bravura</webstart.plugin.version>
+    <webstart.plugin.version>1.2.1-bravura</webstart.plugin.version>
   </properties>
 
   <dependencies>
@@ -339,7 +341,7 @@ jarsigner \
 | Certificate chain warnings from `jarsigner` | Provide `<certchain>` with a PEM file containing the full chain from your CA |
 | `Could not obtain key store location` | Use `<keystore>NONE</keystore>` for Azure Key Vault (not a file path) |
 | Provider / module errors on JDK 11+ | Ensure `-J--module-path` and `-J--add-modules=com.azure.security.keyvault.jca` point at the copied JCA JAR |
-| Custom `-J` arguments ignored | Upgrade to `1.0.7-bravura` or later — POM-configured arguments are preserved through signing |
+| Custom `-J` arguments ignored | Upgrade to `1.2.1-bravura` or later — POM-configured arguments are preserved through signing |
 | Auth failures in CI | Confirm Key Vault RBAC/access policy for the service principal or managed identity used by the agent |
 
 ---
@@ -402,12 +404,12 @@ Releases are triggered manually from **Actions → Release → Run workflow**.
 
 | Input | Example | Description |
 |-------|---------|-------------|
-| `release_version` | `1.0.7-bravura` | Version applied to all POMs |
+| `release_version` | `1.2.1-bravura` | Version applied to all POMs |
 | `skipTests` | `true` | Skip unit tests during build and deploy |
 | `run_integration_tests` | `false` | Run `webstart-it` before tagging |
 | `deploy_to_maven_central` | `false` | Also publish to Maven Central (optional) |
 
-The workflow creates branch `v{version}`, tag `v{version}-release`, publishes to GitHub Packages, and opens a GitHub Release.
+The workflow creates branch `v{version}`, tag `v{version}-release`, publishes to GitHub Packages, optionally to Maven Central, and opens a GitHub Release.
 
 ---
 
@@ -416,7 +418,8 @@ The workflow creates branch `v{version}`, tag `v{version}-release`, publishes to
 - JDK 11+ compilation and JDK 21 build/runtime support
 - Pack200 graceful degradation and Commons Compress path
 - Azure KeyVault JCA and hardware key signing improvements
-- Manual release workflow and `webstart-it` integration harness
+- Maven Central publishing under `io.github.martinhickson`
+- Manual release workflow, unit test suite, and `webstart-it` integration harness
 
 ---
 
