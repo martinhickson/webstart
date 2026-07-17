@@ -25,7 +25,7 @@ jobs:
 
       - name: Verify installed plugin contains build report
         run: |
-          PLUGIN_JAR="$HOME/.m2/repository/org/codehaus/mojo/webstart-maven-plugin/1.0.1-bravura-SNAPSHOT/webstart-maven-plugin-1.0.1-bravura-SNAPSHOT.jar"
+          PLUGIN_JAR="$HOME/.m2/repository/io/github/martinhickson/webstart-maven-plugin/1.0.1-bravura-SNAPSHOT/webstart-maven-plugin-1.0.1-bravura-SNAPSHOT.jar"
           test -f "$PLUGIN_JAR"
           jar tf "$PLUGIN_JAR" | grep -F 'org/codehaus/mojo/webstart/util/BuildReport.class'
 

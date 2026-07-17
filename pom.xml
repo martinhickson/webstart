@@ -8,6 +8,7 @@
     <version>50</version>
   </parent>
 
+  <groupId>io.github.martinhickson</groupId>
   <artifactId>webstart</artifactId>
   <version>1.0.1-bravura-SNAPSHOT</version>
   <packaging>pom</packaging>
@@ -108,6 +109,7 @@
 
     <!-- all modules shares the same version in our projects -->
     <autoVersionSubmodules>true</autoVersionSubmodules>
+    <central.publishing.plugin.version>0.9.0</central.publishing.plugin.version>
   </properties>
 
   <repositories>
@@ -401,4 +403,48 @@
       </plugin>
     </plugins>
   </build>
+
+  <profiles>
+    <profile>
+      <id>central-release</id>
+      <distributionManagement>
+        <repository>
+          <id>central</id>
+          <url>https://central.sonatype.com/</url>
+        </repository>
+        <snapshotRepository>
+          <id>central</id>
+          <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+        </snapshotRepository>
+      </distributionManagement>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.sonatype.central</groupId>
+            <artifactId>central-publishing-maven-plugin</artifactId>
+            <version>${central.publishing.plugin.version}</version>
+            <extensions>true</extensions>
+            <configuration>
+              <publishingServerId>central</publishingServerId>
+              <autoPublish>true</autoPublish>
+              <waitUntil>published</waitUntil>
+            </configuration>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>sign</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>
