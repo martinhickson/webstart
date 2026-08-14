@@ -12,6 +12,7 @@ import junit.framework.TestCase;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -22,6 +23,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.util.zip.GZIPOutputStream;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
@@ -47,6 +49,11 @@ public class JnlpDownloadServletIT
      */
     private static final long HUGE_SIZE = 3L * 1024 * 1024 * 1024;
 
+    /**
+     * 5 GiB, chosen to also exceed 2^32 so >4 GiB offsets are exercised.
+     */
+    private static final long HUGE5_SIZE = 5L * 1024 * 1024 * 1024;
+
     private Undertow server;
 
     private int port;
@@ -70,12 +77,17 @@ public class JnlpDownloadServletIT
 
         webRoot = Files.createTempDirectory( "webstart-it" ).toFile();
         copyWebappResources( webRoot );
+        generateFixtures( webRoot );
 
-        // sparse multi-GiB file (no physical disk usage) to exercise the
+        // sparse multi-GiB files (no physical disk usage) to exercise the
         // long content-length and >2 GiB NIO transfer paths
         try ( RandomAccessFile raf = new RandomAccessFile( new File( webRoot, "huge.bin" ), "rw" ) )
         {
             raf.setLength( HUGE_SIZE );
+        }
+        try ( RandomAccessFile raf = new RandomAccessFile( new File( webRoot, "huge5.bin" ), "rw" ) )
+        {
+            raf.setLength( HUGE5_SIZE );
         }
 
         ServletInfo servletInfo =
@@ -159,6 +171,58 @@ public class JnlpDownloadServletIT
                             StandardCopyOption.REPLACE_EXISTING );
             }
         }
+    }
+
+    /**
+     * Generates the binary test fixtures at runtime instead of committing
+     * built JAR/GZ files to the repository.
+     */
+    private static void generateFixtures( File target )
+            throws IOException
+    {
+        writeFile( target, "sample.jar", bytes( 1000, 1 ) );
+        writeFile( target, "plus+minus.jar", bytes( 1000, 1 ) );
+        writeFile( target, "with space.jar", bytes( 1000, 1 ) );
+        writeFile( target, "caf\u00e9.jar", bytes( 1000, 1 ) );
+        writeFile( target, "empty.jar", new byte[0] );
+        writeFile( target, "sample.jar.pack.gz", bytes( 200, 3 ) );
+        writeFile( target, "sample__V1_0.jar", bytes( 200, 5 ) );
+        writeFile( target, "archjar__V1_0__Olinux__Aamd64.jar", bytes( 300, 7 ) );
+        writeGzip( target, "sample.jar.gz", bytes( 100, 1 ) );
+        writeGzip( target, "sample__V1_0.jar.gz", bytes( 200, 5 ) );
+    }
+
+    private static byte[] bytes( int length, int multiplier )
+    {
+        byte[] content = new byte[length];
+        for ( int i = 0; i < length; i++ )
+        {
+            content[i] = (byte) ( ( i * multiplier ) % 256 );
+        }
+        return content;
+    }
+
+    private static void writeFile( File target, String name, byte[] content )
+            throws IOException
+    {
+        Files.write( new File( target, name ).toPath(), content );
+    }
+
+    private static void writeGzip( File target, String name, byte[] content )
+            throws IOException
+    {
+        try ( GZIPOutputStream out = new GZIPOutputStream( new FileOutputStream( new File( target, name ) ) ) )
+        {
+            out.write( content );
+        }
+    }
+
+    /**
+     * Length of a generated fixture in the temp web root.
+     */
+    private long fixtureLength( String name )
+    {
+        return new File( webRoot, name ).length();
     }
 
     private static void deleteRecursively( File dir )
@@ -636,7 +700,8 @@ public class JnlpDownloadServletIT
         {
             assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
             assertEquals( "gzip", connection.getHeaderField( "Content-Encoding" ) );
-            assertEquals( "bytes 10-19/120", connection.getHeaderField( "Content-Range" ) );
+            assertEquals( "bytes 10-19/" + fixtureLength( "sample.jar.gz" ),
+                          connection.getHeaderField( "Content-Range" ) );
             assertGzipContent( connection, 10, 10 );
         }
         finally
@@ -787,7 +852,7 @@ public class JnlpDownloadServletIT
             assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
             assertEquals( "pack200-gzip", connection.getHeaderField( "Content-Encoding" ) );
             assertEquals( "bytes 10-19/200", connection.getHeaderField( "Content-Range" ) );
-            assertSlice( connection, "/webapp/sample.jar.pack.gz", 10, 10 );
+            assertSlice( connection, "sample.jar.pack.gz", 10, 10 );
         }
         finally
         {
@@ -805,7 +870,7 @@ public class JnlpDownloadServletIT
             assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
             assertEquals( "1_0", connection.getHeaderField( "x-java-jnlp-version-id" ) );
             assertEquals( "bytes 10-19/200", connection.getHeaderField( "Content-Range" ) );
-            assertSlice( connection, "/webapp/sample__V1_0.jar", 10, 10 );
+            assertSlice( connection, "sample__V1_0.jar", 10, 10 );
         }
         finally
         {
@@ -1104,7 +1169,7 @@ public class JnlpDownloadServletIT
         try
         {
             assertEquals( 416, connection.getResponseCode() );
-            assertEquals( "bytes */120", connection.getHeaderField( "Content-Range" ) );
+            assertEquals( "bytes */" + fixtureLength( "sample.jar.gz" ), connection.getHeaderField( "Content-Range" ) );
         }
         finally
         {
@@ -1124,8 +1189,9 @@ public class JnlpDownloadServletIT
         try
         {
             assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
-            assertEquals( "bytes 0-119/120", connection.getHeaderField( "Content-Range" ) );
-            assertGzipContent( connection, 0, 120 );
+            assertEquals( "bytes 0-" + ( fixtureLength( "sample.jar.gz" ) - 1 ) + "/" + fixtureLength( "sample.jar.gz" ),
+                          connection.getHeaderField( "Content-Range" ) );
+            assertGzipContent( connection, 0, (int) fixtureLength( "sample.jar.gz" ) );
         }
         finally
         {
@@ -1336,7 +1402,8 @@ public class JnlpDownloadServletIT
         try
         {
             assertEquals( HttpURLConnection.HTTP_OK, connection.getResponseCode() );
-            assertEquals( "120", connection.getHeaderField( "Content-Length" ) );
+            assertEquals( String.valueOf( fixtureLength( "sample.jar.gz" ) ),
+                          connection.getHeaderField( "Content-Length" ) );
             assertEquals( "gzip", connection.getHeaderField( "Content-Encoding" ) );
             assertEquals( "bytes", connection.getHeaderField( "Accept-Ranges" ) );
         }
@@ -1623,8 +1690,9 @@ public class JnlpDownloadServletIT
             assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
             assertEquals( "gzip", connection.getHeaderField( "Content-Encoding" ) );
             assertEquals( "1_0", connection.getHeaderField( "x-java-jnlp-version-id" ) );
-            assertEquals( "bytes 10-19/223", connection.getHeaderField( "Content-Range" ) );
-            assertSlice( connection, "/webapp/sample__V1_0.jar.gz", 10, 10 );
+            assertEquals( "bytes 10-19/" + fixtureLength( "sample__V1_0.jar.gz" ),
+                          connection.getHeaderField( "Content-Range" ) );
+            assertSlice( connection, "sample__V1_0.jar.gz", 10, 10 );
         }
         finally
         {
@@ -1646,7 +1714,7 @@ public class JnlpDownloadServletIT
             assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
             assertEquals( "pack200-gzip", connection.getHeaderField( "Content-Encoding" ) );
             assertEquals( "bytes 10-19/200", connection.getHeaderField( "Content-Range" ) );
-            assertSlice( connection, "/webapp/sample.jar.pack.gz", 10, 10 );
+            assertSlice( connection, "sample.jar.pack.gz", 10, 10 );
         }
         finally
         {
@@ -1756,7 +1824,7 @@ public class JnlpDownloadServletIT
         {
             assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
             assertEquals( "bytes 0-199/200", connection.getHeaderField( "Content-Range" ) );
-            assertSlice( connection, "/webapp/sample__V1_0.jar", 0, 200 );
+            assertSlice( connection, "sample__V1_0.jar", 0, 200 );
         }
         finally
         {
@@ -1837,7 +1905,8 @@ public class JnlpDownloadServletIT
         {
             assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
             assertEquals( "gzip", connection.getHeaderField( "Content-Encoding" ) );
-            assertEquals( "bytes 10-19/120", connection.getHeaderField( "Content-Range" ) );
+            assertEquals( "bytes 10-19/" + fixtureLength( "sample.jar.gz" ),
+                          connection.getHeaderField( "Content-Range" ) );
             assertGzipContent( connection, 10, 10 );
         }
         finally
@@ -1896,7 +1965,7 @@ public class JnlpDownloadServletIT
         {
             assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
             assertEquals( "bytes 10-19/300", connection.getHeaderField( "Content-Range" ) );
-            assertSlice( connection, "/webapp/archjar__V1_0__Olinux__Aamd64.jar", 10, 10 );
+            assertSlice( connection, "archjar__V1_0__Olinux__Aamd64.jar", 10, 10 );
         }
         finally
         {
@@ -1913,7 +1982,7 @@ public class JnlpDownloadServletIT
         {
             assertEquals( HttpURLConnection.HTTP_OK, connection.getResponseCode() );
             assertEquals( "300", connection.getHeaderField( "Content-Length" ) );
-            assertSlice( connection, "/webapp/archjar__V1_0__Olinux__Aamd64.jar", 0, 300 );
+            assertSlice( connection, "archjar__V1_0__Olinux__Aamd64.jar", 0, 300 );
         }
         finally
         {
@@ -1947,7 +2016,8 @@ public class JnlpDownloadServletIT
         try
         {
             assertEquals( HttpURLConnection.HTTP_OK, connection.getResponseCode() );
-            assertEquals( "223", connection.getHeaderField( "Content-Length" ) );
+            assertEquals( String.valueOf( fixtureLength( "sample__V1_0.jar.gz" ) ),
+                          connection.getHeaderField( "Content-Length" ) );
             assertEquals( "gzip", connection.getHeaderField( "Content-Encoding" ) );
             assertEquals( "1_0", connection.getHeaderField( "x-java-jnlp-version-id" ) );
         }
@@ -2105,28 +2175,23 @@ public class JnlpDownloadServletIT
 
     /**
      * Reads the raw (compressed) response body and asserts it equals the
-     * expected slice of the 120-byte gzip resource.
+     * expected slice of the gzip resource generated in the temp web root.
      */
-    private static void assertGzipContent( HttpURLConnection connection, int start, int length )
+    private void assertGzipContent( HttpURLConnection connection, int start, int length )
             throws IOException
     {
-        assertSlice( connection, "/webapp/sample.jar.gz", start, length );
+        assertSlice( connection, "sample.jar.gz", start, length );
     }
 
     /**
      * Reads the response body and asserts it equals the given slice of a
-     * classpath test resource.
+     * generated fixture in the temp web root.
      */
-    private static void assertSlice( HttpURLConnection connection, String resourcePath, int start, int length )
+    private void assertSlice( HttpURLConnection connection, String fileName, int start, int length )
             throws IOException
     {
         byte[] actual = readAll( connection.getInputStream() );
-        byte[] full;
-        try ( InputStream in = JnlpDownloadServletIT.class.getResourceAsStream( resourcePath ) )
-        {
-            assertNotNull( "Missing test resource: " + resourcePath, in );
-            full = readAll( in );
-        }
+        byte[] full = Files.readAllBytes( new File( webRoot, fileName ).toPath() );
         assertEquals( length, actual.length );
         byte[] expected = Arrays.copyOfRange( full, start, start + length );
         assertTrue( "Unexpected body", Arrays.equals( expected, actual ) );
