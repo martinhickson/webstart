@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 where practical for `-bravura` maintenance releases.
 
+## [Unreleased]
+
+### Added
+
+- HTTP `Range` request support (RFC 7233) in `JnlpDownloadServlet` so JNLP clients can resume interrupted downloads
+  - Single-range requests are answered with `206 Partial Content` and a `Content-Range` header
+  - Unsatisfiable ranges return `416 Requested Range Not Satisfiable` with `Content-Range: bytes */<length>`
+  - File-backed resources are streamed via a NIO `FileChannel` (`transferTo`); URL-backed resources fall back to a skipped stream
+  - Full file responses now advertise `Accept-Ranges: bytes`
+- Unit tests for the new `HttpRange` parser and Undertow integration tests covering partial, suffix, open-ended, single-byte, multi-range, unknown-unit, empty-resource, end-clamping, oversized/overflowing numbers and unsatisfiable range requests
+
+### Fixed
+
+- `HEAD` requests now send `200` via `setStatus` instead of `sendError`, so the reported `Content-Length` reflects the resource rather than a generated error page
+- `Range` headers using an unknown range unit (e.g. `items=0-9`) are ignored per RFC 7233 section 2.3 instead of answered with `416`
+- `If-Modified-Since` is ignored when a `Range` header is present (RFC 7232 section 3.3), so a client resuming a download receives `206 Partial Content` instead of `304 Not Modified`
+- Empty suffix specs (`bytes=-`) are rejected, and overflowing range numbers no longer crash parsing: oversized ends/suffixes clamp to the representation while oversized starts are unsatisfiable (`416`)
+- `HEAD` responses and gzip/pack200 variants report `Content-Length` as a `long`, avoiding int overflow for resources larger than 2 GiB
+- Resource paths are URL-decoded before lookup (was: only the encoded `getRequestURI` was used), so files with spaces or encoded characters are now served
+- `If-Range` support (RFC 7233 section 3.2): a date-based `If-Range` that no longer matches the representation causes the `Range` header to be ignored and the full content to be served; malformed `If-Range` values are ignored
+- Extended integration tests to cover pack200-gzip variants, version-based lookups (`name__V<version>.jar`), mixed-unit ranges, `If-Range` match/mismatch/malformed, blocked direct access to versioned files, unicode-encoded paths, and empty-resource ranges
+
 ## [1.2.4-bravura] - 2026-07-18
 
 ### Added

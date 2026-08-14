@@ -39,6 +39,8 @@ package jnlp.sample.servlet;
 import jakarta.servlet.ServletContext;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.File;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -89,10 +91,19 @@ public class DownloadRequest
 
     private String _encoding = null;
 
+    private String _range = null;
+
+    private long _ifRange = -1;
+
     private HttpServletRequest _httpRequest = null;
 
     // HTTP Compression RFC 2616 : Standard headers
     public static final String ACCEPT_ENCODING = "accept-encoding";
+
+    // HTTP Range RFC 7233 : Standard headers
+    public static final String HEADER_RANGE = "Range";
+
+    public static final String HEADER_IF_RANGE = "If-Range";
 
     // Contruct Request object based on HTTP request
     public DownloadRequest( HttpServletRequest request )
@@ -106,6 +117,8 @@ public class DownloadRequest
         _httpRequest = request;
         _path = request.getRequestURI();
         _encoding = request.getHeader( ACCEPT_ENCODING );
+        _range = request.getHeader( HEADER_RANGE );
+        _ifRange = getDateHeader( request );
         String context_path = request.getContextPath();
         if ( context_path != null )
         {
@@ -118,6 +131,16 @@ public class DownloadRequest
         if ( _path == null )
         {
             _path = "/"; // No path given
+        }
+        // getRequestURI returns the undecoded path; decode it before using it
+        // to look up resources, so names with spaces or encoded characters work
+        try
+        {
+            _path = URLDecoder.decode( _path, StandardCharsets.UTF_8 );
+        }
+        catch ( IllegalArgumentException iae )
+        {
+            // invalid percent-encoding - keep the raw path
         }
         _path = _path.trim();
         if ( _context != null && !_path.endsWith( "/" ) )
@@ -161,6 +184,8 @@ public class DownloadRequest
     private DownloadRequest( DownloadRequest dreq )
     {
         _encoding = dreq._encoding;
+        _range = dreq._range;
+        _ifRange = dreq._ifRange;
         _context = dreq._context;
         _httpRequest = dreq._httpRequest;
         _path = dreq._path;
@@ -180,6 +205,24 @@ public class DownloadRequest
     {
         String res = req.getParameter( key );
         return ( res == null ) ? null : res.trim();
+    }
+
+    /**
+     * Returns the {@code If-Range} header as a date, or {@code -1} if the
+     * header is absent or malformed. A malformed {@code If-Range} must be
+     * ignored (RFC 7233 section 3.2), which is equivalent to treating it as
+     * absent.
+     */
+    private long getDateHeader( HttpServletRequest req )
+    {
+        try
+        {
+            return req.getDateHeader( HEADER_IF_RANGE );
+        }
+        catch ( IllegalArgumentException iae )
+        {
+            return -1;
+        }
     }
 
     /**
@@ -281,6 +324,20 @@ public class DownloadRequest
         return _encoding;
     }
 
+    public String getRange()
+    {
+        return _range;
+    }
+
+    /**
+     * @return the {@code If-Range} header as a date, or {@code -1} if absent
+     *         or malformed
+     */
+    public long getIfRange()
+    {
+        return _ifRange;
+    }
+
     public String[] getOS()
     {
         return _os;
@@ -323,7 +380,8 @@ public class DownloadRequest
     // Debug
     public String toString()
     {
-        return "DownloadRequest[path=" + _path + showEntry( " encoding=", _encoding ) + showEntry( " query=", _query ) +
+        return "DownloadRequest[path=" + _path + showEntry( " encoding=", _encoding ) + showEntry( " range=", _range ) +
+                showEntry( " query=", _query ) +
                 showEntry( " TestJRE=", _testJRE ) + showEntry( " version=", _version ) +
                 showEntry( " currentVersionId=", _currentVersionId ) + showEntry( " os=", _os ) +
                 showEntry( " arch=", _arch ) + showEntry( " locale=", _locale ) +

@@ -41,7 +41,10 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import java.io.File;
 import java.io.IOException;
+import java.net.URISyntaxException;
+import java.net.URL;
 import java.util.ResourceBundle;
 
 /**
@@ -190,14 +193,15 @@ public class JnlpDownloadServlet
             if ( isHead )
             {
 
-                int cl = jnlpres.getResource().openConnection().getContentLength();
+                long cl = jnlpres.getResource().openConnection().getContentLengthLong();
 
                 // head request response
                 dres = DownloadResponse.getHeadRequestResponse( jnlpres.getMimeType(), jnlpres.getVersionId(),
                                                                 jnlpres.getLastModified(), cl );
 
             }
-            else if ( ifModifiedSince != -1 && ( ifModifiedSince / 1000 ) >= ( jnlpres.getLastModified() / 1000 ) )
+            else if ( dreq.getRange() == null && ifModifiedSince != -1 &&
+                    ( ifModifiedSince / 1000 ) >= ( jnlpres.getLastModified() / 1000 ) )
             {
                 // We divide the value returned by getLastModified here by 1000
                 // because if protocol is HTTP, last 3 digits will always be 
@@ -340,9 +344,94 @@ public class JnlpDownloadServlet
 
         _log.addDebug( "Real resource returned: " + jr );
 
+        // Prefer the real on-disk file so that range requests can be served
+        // with a NIO FileChannel (falls back to a streamed URL otherwise)
+        File file = getRealFile( jr );
+
+        // HTTP Range (RFC 7233) - used by JNLP clients to resume interrupted
+        // downloads. Only honoured for single ranges on file resources.
+        // Range units other than "bytes" must be ignored (RFC 7233 section 2.3).
+        String rangeHeader = dreq.getRange();
+        boolean honorRange = rangeHeader != null && HttpRange.isByteRange( rangeHeader );
+        if ( honorRange )
+        {
+            // If-Range (RFC 7233 section 3.2): if the date does not match the
+            // current representation, ignore the Range header and send the full
+            // representation instead.
+            long ifRange = dreq.getIfRange();
+            if ( ifRange != -1 && jnlpres.getLastModified() != 0 &&
+                    ifRange / 1000 < jnlpres.getLastModified() / 1000 )
+            {
+                _log.addDebug( "If-Range does not match - sending full content" );
+                honorRange = false;
+            }
+        }
+        if ( honorRange )
+        {
+            long contentLength =
+                    ( file != null ) ? file.length() : jr.getResource().openConnection().getContentLengthLong();
+            HttpRange range = HttpRange.parse( rangeHeader, contentLength );
+            if ( range == null )
+            {
+                _log.addDebug( "Requested range not satisfiable: " + rangeHeader );
+                return DownloadResponse.getUnsatisfiableRangeResponse( jr.getMimeType(), jr.getLastModified(),
+                                                                       jr.getReturnVersionId(), contentLength );
+            }
+            if ( file != null )
+            {
+                return DownloadResponse.getFileDownloadResponse( file, jr.getMimeType(), jr.getLastModified(),
+                                                                 jr.getReturnVersionId(), range );
+            }
+            return DownloadResponse.getFileDownloadResponse( jr.getResource(), jr.getMimeType(), jr.getLastModified(),
+                                                             jr.getReturnVersionId(), range );
+        }
+
         // Return WAR file resource
+        if ( file != null )
+        {
+            return DownloadResponse.getFileDownloadResponse( file, jr.getMimeType(), jr.getLastModified(),
+                                                             jr.getReturnVersionId() );
+        }
         return DownloadResponse.getFileDownloadResponse( jr.getResource(), jr.getMimeType(), jr.getLastModified(),
                                                          jr.getReturnVersionId() );
+    }
+
+    /**
+     * Resolves a {@link JnlpResource} to a real on-disk file when possible,
+     * otherwise returns {@code null}.
+     *
+     * @param jnlpres the located resource
+     * @return the backing file, or {@code null} if the resource is not
+     *         file-backed (e.g. packaged inside a WAR archive)
+     */
+    private File getRealFile( JnlpResource jnlpres )
+    {
+        String realPath = getServletContext().getRealPath( jnlpres.getPath() );
+        if ( realPath != null )
+        {
+            File file = new File( realPath );
+            if ( file.isFile() )
+            {
+                return file;
+            }
+        }
+        URL resource = jnlpres.getResource();
+        if ( resource != null && "file".equals( resource.getProtocol() ) )
+        {
+            try
+            {
+                File file = new File( resource.toURI() );
+                if ( file.isFile() )
+                {
+                    return file;
+                }
+            }
+            catch ( URISyntaxException e )
+            {
+                _log.addDebug( "Invalid file URL for " + jnlpres.getPath() + ": " + e );
+            }
+        }
+        return null;
     }
 }
 
