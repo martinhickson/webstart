@@ -5360,6 +5360,145 @@ public class JnlpDownloadServletIT
         }
     }
 
+    public void testJardiffCacheInvalidatesOnSourceChange()
+            throws Exception
+    {
+        String url = "http://localhost:" + port + "/v2.jar?version-id=1.1&current-version-id=1.0";
+
+        HttpURLConnection first = open( url );
+        byte[] firstBody;
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_OK, first.getResponseCode() );
+            firstBody = readAll( first.getInputStream() );
+        }
+        finally
+        {
+            first.disconnect();
+        }
+
+        // redeploy the new jar with different content; its mtime changes
+        File newJar = new File( webRoot, "v2__V1_1.jar" );
+        Map<String, byte[]> changed = new LinkedHashMap<>();
+        for ( int i = 0; i < 10; i++ )
+        {
+            byte[] data = new byte[4 * 1024];
+            new java.util.Random( i ).nextBytes( data );
+            changed.put( "data" + i + ".bin", data );
+        }
+        changed.put( "version.txt", "2.0".getBytes( StandardCharsets.UTF_8 ) );
+        writeJar( newJar, changed );
+        newJar.setLastModified( System.currentTimeMillis() + 10_000 );
+
+        HttpURLConnection second = open( url );
+        byte[] secondBody;
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_OK, second.getResponseCode() );
+            assertTrue( second.getContentType().contains( "java-archive-diff" ) );
+            secondBody = readAll( second.getInputStream() );
+        }
+        finally
+        {
+            second.disconnect();
+        }
+
+        // the cached patch must be invalidated, so the regenerated jardiff differs
+        assertFalse( "stale jardiff was served", Arrays.equals( firstBody, secondBody ) );
+    }
+
+    public void testIfNoneMatchIgnoredServesRange()
+            throws Exception
+    {
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/sample.jar" ).openConnection();
+        connection.setRequestMethod( "GET" );
+        connection.setRequestProperty( "Range", "bytes=10-19" );
+        connection.setRequestProperty( "If-None-Match", "\"anything\"" );
+        connection.connect();
+        try
+        {
+            // the servlet has no ETags, so If-None-Match is ignored
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            assertEquals( "bytes 10-19/1000", connection.getHeaderField( "Content-Range" ) );
+            assertContent( connection, 10, 10 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testQueryParameterOrderIndependence()
+            throws Exception
+    {
+        HttpURLConnection connection = open( "http://localhost:" + port +
+                "/archjar.jar?os=linux&version-id=1.0&arch=amd64", "bytes=10-19" );
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            assertEquals( "bytes 10-19/300", connection.getHeaderField( "Content-Range" ) );
+            assertSlice( connection, "archjar__V1_0__Olinux__Aamd64.jar", 10, 10 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testConcurrentJardiffRequests()
+            throws Exception
+    {
+        ExecutorService pool = Executors.newFixedThreadPool( 8 );
+        try
+        {
+            List<Future<?>> futures = new ArrayList<>();
+            for ( int i = 0; i < 4; i++ )
+            {
+                futures.add( pool.submit( () -> {
+                    HttpURLConnection c = open(
+                            "http://localhost:" + port + "/v2.jar?version-id=1.1&current-version-id=1.0" );
+                    try
+                    {
+                        assertEquals( HttpURLConnection.HTTP_OK, c.getResponseCode() );
+                        assertTrue( c.getContentType().contains( "java-archive-diff" ) );
+                        return null;
+                    }
+                    finally
+                    {
+                        c.disconnect();
+                    }
+                } ) );
+            }
+            for ( Future<?> future : futures )
+            {
+                future.get( 30, TimeUnit.SECONDS );
+            }
+        }
+        finally
+        {
+            pool.shutdownNow();
+        }
+    }
+
+    public void testHeadOnJardiffSource()
+            throws Exception
+    {
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/v2.jar?version-id=1.1&current-version-id=1.0" ).openConnection();
+        connection.setRequestMethod( "HEAD" );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_OK, connection.getResponseCode() );
+            assertNotNull( connection.getHeaderField( "Content-Length" ) );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
     public void testHeadRequestIgnoresRange()
             throws Exception
     {

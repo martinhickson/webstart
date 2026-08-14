@@ -184,18 +184,67 @@ public class JarDiffHandler
         }
     }
 
+    /**
+     * Captures the on-disk identity of the two source jars a jardiff was
+     * generated from, so a cached jardiff can be invalidated when either
+     * source changes (e.g. after a redeploy).
+     */
+    static private class SourceInfo
+    {
+        private File _newSource;          // may be null when the source was a
+                                          // temporary download (not persistent)
+
+        private File _oldSource;
+
+        private long _newSourceLastModified;
+
+        private long _oldSourceLastModified;
+
+        SourceInfo( File newSource, File oldSource )
+        {
+            _newSource = newSource;
+            _oldSource = oldSource;
+            _newSourceLastModified = ( newSource == null ) ? 0 : newSource.lastModified();
+            _oldSourceLastModified = ( oldSource == null ) ? 0 : oldSource.lastModified();
+        }
+
+        boolean isStale()
+        {
+            if ( _newSource == null || _oldSource == null )
+            {
+                // temporary sources cannot be re-validated
+                return false;
+            }
+            return !_newSource.isFile() || !_oldSource.isFile() ||
+                    _newSource.lastModified() != _newSourceLastModified ||
+                    _oldSource.lastModified() != _oldSourceLastModified;
+        }
+    }
+
     static private class JarDiffEntry
     {
         private File _jardiffFile;    // Location of JARDiff file
 
-        public JarDiffEntry( File jarDiffFile )
+        private SourceInfo _sourceInfo;
+
+        public JarDiffEntry( File jarDiffFile, SourceInfo sourceInfo )
         {
             _jardiffFile = jarDiffFile;
+            _sourceInfo = sourceInfo;
         }
 
         public File getJarDiffFile()
         {
             return _jardiffFile;
+        }
+
+        /**
+         * @return {@code true} when the source jars have changed since this
+         *         entry was generated
+         */
+        public boolean isStale()
+        {
+            return _sourceInfo != null && _sourceInfo.isStale();
         }
     }
 
@@ -243,22 +292,24 @@ public class JarDiffHandler
                 new JarDiffKey( res.getName(), dreq.getCurrentVersionId(), res.getReturnVersionId(), !doJarDiffWorkAround );
 
         JarDiffEntry entry = (JarDiffEntry) _jarDiffEntries.get( key );
-        // If entry is not found, then the querty has not been made.
-        if ( entry == null )
+        // If the entry is missing or the source jars have changed (e.g. after
+        // a redeploy), regenerate the jardiff so a stale patch is never served.
+        if ( entry == null || entry.isStale() )
         {
             if ( _log.isInformationalLevel() )
             {
                 _log.addInformational( "servlet.log.info.jardiff.gen", res.getName(), dreq.getCurrentVersionId(),
                                        res.getReturnVersionId() );
             }
-            File f = generateJarDiff( catalog, dreq, res, doJarDiffWorkAround );
+            SourceInfo sourceInfo = new SourceInfo( null, null );
+            File f = generateJarDiff( catalog, dreq, res, doJarDiffWorkAround, sourceInfo );
             if ( f == null )
             {
                 _log.addWarning( "servlet.log.warning.jardiff.failed", res.getName(), dreq.getCurrentVersionId(),
                                  res.getReturnVersionId() );
             }
             // Store entry in table
-            entry = new JarDiffEntry( f );
+            entry = new JarDiffEntry( f, sourceInfo );
             _jarDiffEntries.put( key, entry );
         }
 
@@ -429,7 +480,7 @@ public class JarDiffHandler
 
 
     private File generateJarDiff( ResourceCatalog catalog, DownloadRequest dreq, JnlpResource res,
-                                  boolean doJarDiffWorkAround )
+                                  boolean doJarDiffWorkAround, SourceInfo sourceInfo )
     {
         boolean del_old = false;
         boolean del_new = false;
@@ -467,6 +518,15 @@ public class JarDiffHandler
             {
                 return null;
             }
+
+            // persistent source files can be re-validated for staleness;
+            // temporary downloads (del_*) cannot
+            sourceInfo._newSource = del_new ? null : new File( newFilePath );
+            sourceInfo._oldSource = del_old ? null : new File( oldFilePath );
+            sourceInfo._newSourceLastModified = ( sourceInfo._newSource == null ) ? 0
+                    : sourceInfo._newSource.lastModified();
+            sourceInfo._oldSourceLastModified = ( sourceInfo._oldSource == null ) ? 0
+                    : sourceInfo._oldSource.lastModified();
 
             // Create temp. file to store JarDiff file in
             File tempDir = (File) _servletContext.getAttribute( "jakarta.servlet.context.tempdir" );
