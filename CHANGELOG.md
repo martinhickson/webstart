@@ -31,12 +31,15 @@ where practical for `-bravura` maintenance releases.
 - `HEAD` responses now mirror the `GET` response for the negotiated encoding (RFC 9110 section 9.3.2): the head branch resolves the gzip/pack200-gzip variant and sets `Content-Encoding` plus the variant's `Content-Length`, instead of always reporting the plain resource
 - URI paths are percent-decoded with `+` preserved as a literal character (RFC 3986 section 3.3); previously `URLDecoder` turned `+` into a space, so files with `+` in their name were not found
 - `JarDiffHandler.isJavawsVersion` and `JarDiffKey` are null-safe: a `current-version-id` request without a `User-Agent` header, or on a basic (non-versioned) resource, no longer throws and falls back to serving the file
+- `ResourceCatalog.lookupResource` is now `synchronized`; versioned lookups are shared across concurrently handled requests
+- The `webstart-jnlp-servlet-it` binary fixtures are generated at test runtime instead of being committed; only the text `launch.jnlp` fixture is tracked
 - The streamed (non-NIO) range fallback for resources inside packaged JARs is now covered by integration tests via a second Undertow deployment
 - Integration tests now cover path traversal rejection (raw and percent-encoded, with and without `Range`), entity-tag-form `If-Range`, case-insensitive `Accept-Encoding` values, future/old `If-Modified-Since`, os/arch-constrained versioned resources, `platform-version-id` error responses, blocked `version.xml`, trailing-slash paths, and `Range` headers lacking `=`
 - Integration tests now serve from a filesystem-backed web root, enabling multi-GiB (sparse) resource coverage: `Content-Length` above 2 GiB, NIO transfers at offsets beyond the int range, and stale-`If-Range` behaviour after a resource is replaced on disk
 - Added concurrent partial-download, repeated-`Range`-header, missing-resource, gzip/pack200 unsatisfiable and suffix ranges, zero-byte resource, `Accept-Ranges` on `416`, and full-download-after-partial tests
 - Added HEAD-on-gzip/pack200 parity tests, 1 MiB partial transfers on the multi-GiB resource, future-dated `If-Range`, gzip encoding on files without a `.gz` variant, pack200-gzip on JNLP files, and multi-GiB suffix/open-ended/end-clamped range tests
 - Added URL-fallback range tests, paths containing literal/encoded `+`, versioned gzip variants, pack200-over-gzip encoding preference, jardiff fallback with and without `User-Agent`, zero-suffix rejection, pack200 unsatisfiable ranges, and full ranges on versioned resources
+- Added encoding q-value (`gzip;q=0.5`, `pack200-gzip;q=1.0`) and `identity`/`*` negotiation tests, jardiff generation failure fallback, version-not-found errors, >4 GiB offsets on a 5 GiB sparse file, URL-fallback HEAD/suffix ranges, concurrent versioned downloads, multi-range unsat, version-id+current-version-id combos, and a parser invariant sweep
 
 ## [1.2.4-bravura] - 2026-07-18
 

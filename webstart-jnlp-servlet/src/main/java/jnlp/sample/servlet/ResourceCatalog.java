@@ -119,7 +119,7 @@ public class ResourceCatalog
     }
 
 
-    public JnlpResource lookupResource( DownloadRequest dreq )
+    public synchronized JnlpResource lookupResource( DownloadRequest dreq )
             throws ErrorResponseException
     {
         // Split request up into path and name

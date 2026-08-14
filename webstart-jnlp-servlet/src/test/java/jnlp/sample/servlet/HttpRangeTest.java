@@ -277,6 +277,50 @@ public class HttpRangeTest
         assertTrue( HttpRange.isByteRange( "bYtEs=0-9" ) );
     }
 
+    public void testNegativeLikeSpecRejected()
+    {
+        assertNull( HttpRange.parse( "bytes=-5-10", CONTENT_LENGTH ) );
+        assertNull( HttpRange.parse( "bytes=5--10", CONTENT_LENGTH ) );
+    }
+
+    public void testSuffixLeadingZeros()
+    {
+        HttpRange range = HttpRange.parse( "bytes=-05", CONTENT_LENGTH );
+        assertNotNull( range );
+        assertEquals( 95, range.getStart() );
+        assertEquals( 99, range.getEnd() );
+    }
+
+    public void testStartAndEndLeadingZeros()
+    {
+        HttpRange range = HttpRange.parse( "bytes=00-09", CONTENT_LENGTH );
+        assertNotNull( range );
+        assertEquals( 0, range.getStart() );
+        assertEquals( 9, range.getEnd() );
+    }
+
+    public void testInvariantSweep()
+    {
+        String[] specs = { "bytes=0-0", "bytes=0-", "bytes=-1", "bytes=5-5", "bytes=0-9", "bytes=10-20",
+                           "bytes=-3" };
+        for ( long length = 0; length <= 10; length++ )
+        {
+            for ( String spec : specs )
+            {
+                HttpRange range = HttpRange.parse( spec, length );
+                if ( range == null )
+                {
+                    continue;
+                }
+                assertTrue( "start<=end for " + spec + " len " + length, range.getStart() <= range.getEnd() );
+                assertTrue( "start>=0 for " + spec + " len " + length, range.getStart() >= 0 );
+                assertTrue( "end<len for " + spec + " len " + length, range.getEnd() < length );
+                assertEquals( "length for " + spec + " len " + length, range.getEnd() - range.getStart() + 1,
+                              range.getLength() );
+            }
+        }
+    }
+
     public void testSpaceBetweenUnitAndEquals()
     {
         // the unit still parses as "bytes" but the spec is malformed, so it
