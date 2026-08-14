@@ -190,7 +190,22 @@ public class JnlpDownloadServlet
 
             DownloadResponse dres;
 
-            if ( isHead )
+            if ( ifModifiedSince != -1 && dreq.getRange() == null &&
+                    ( ifModifiedSince / 1000 ) >= ( jnlpres.getLastModified() / 1000 ) )
+            {
+                // We divide the value returned by getLastModified here by 1000
+                // because if protocol is HTTP, last 3 digits will always be 
+                // zero.  However, if protocol is JNDI, that's not the case.
+                // so we divide the value by 1000 to remove the last 3 digits
+                // before comparison
+
+                // return 304 not modified if possible; applies to both GET and
+                // HEAD (RFC 9110 section 9.3.2)
+                _log.addDebug( "return 304 Not modified" );
+                dres = DownloadResponse.getNotModifiedResponse();
+
+            }
+            else if ( isHead )
             {
                 // Resolve the encoding-negotiated variant so HEAD mirrors what
                 // a GET would return (RFC 9110 section 9.3.2)
@@ -202,20 +217,6 @@ public class JnlpDownloadServlet
                 dres = DownloadResponse.getHeadRequestResponse( headRes.getMimeType(), headRes.getReturnVersionId(),
                                                                 headRes.getLastModified(), cl,
                                                                 getContentEncoding( headRes.getPath() ) );
-
-            }
-            else if ( dreq.getRange() == null && ifModifiedSince != -1 &&
-                    ( ifModifiedSince / 1000 ) >= ( jnlpres.getLastModified() / 1000 ) )
-            {
-                // We divide the value returned by getLastModified here by 1000
-                // because if protocol is HTTP, last 3 digits will always be 
-                // zero.  However, if protocol is JNDI, that's not the case.
-                // so we divide the value by 1000 to remove the last 3 digits
-                // before comparison
-
-                // return 304 not modified if possible
-                _log.addDebug( "return 304 Not modified" );
-                dres = DownloadResponse.getNotModifiedResponse();
 
             }
             else
