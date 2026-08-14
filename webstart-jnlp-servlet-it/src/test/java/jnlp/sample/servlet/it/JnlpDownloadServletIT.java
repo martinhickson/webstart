@@ -23,13 +23,18 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.util.Arrays;
 import java.util.zip.GZIPOutputStream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -254,6 +259,37 @@ public class JnlpDownloadServletIT
         new File( target, "sample.jar.pack.gz" ).setLastModified( now - 120_000 );
         new File( target, "sample__V1_0.jar" ).setLastModified( now );
         new File( target, "sample__V1_0.jar.gz" ).setLastModified( now - 60_000 );
+
+        // real (valid zip) jars so JarDiff.createPatch can generate a patch.
+        // Both jars share ten identical 4 KiB entries; the new jar adds one
+        // small entry, so the jardiff (references + one entry) is far smaller
+        // than the new jar and is not discarded.
+        Map<String, byte[]> oldEntries = new LinkedHashMap<>();
+        Map<String, byte[]> newEntries = new LinkedHashMap<>();
+        for ( int i = 0; i < 10; i++ )
+        {
+            byte[] data = new byte[4 * 1024];
+            new java.util.Random( i ).nextBytes( data );
+            oldEntries.put( "data" + i + ".bin", data );
+            newEntries.put( "data" + i + ".bin", data );
+        }
+        newEntries.put( "version.txt", "1.1".getBytes( StandardCharsets.UTF_8 ) );
+        writeJar( new File( target, "v2__V1_0.jar" ), oldEntries );
+        writeJar( new File( target, "v2__V1_1.jar" ), newEntries );
+    }
+
+    private static void writeJar( File file, Map<String, byte[]> entries )
+            throws IOException
+    {
+        try ( ZipOutputStream zos = new ZipOutputStream( new FileOutputStream( file ) ) )
+        {
+            for ( Map.Entry<String, byte[]> entry : entries.entrySet() )
+            {
+                zos.putNextEntry( new ZipEntry( entry.getKey() ) );
+                zos.write( entry.getValue() );
+                zos.closeEntry();
+            }
+        }
     }
 
     private static byte[] bytes( int length, int multiplier )
@@ -4631,6 +4667,139 @@ public class JnlpDownloadServletIT
         }
     }
 
+    public void testJardiffSuccessIgnoresRange()
+            throws Exception
+    {
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/v2.jar?version-id=1.1&current-version-id=1.0" ).openConnection();
+        connection.setRequestMethod( "GET" );
+        connection.setRequestProperty( "Range", "bytes=0-9" );
+        connection.connect();
+        try
+        {
+            // no javaws User-Agent -> minimal jardiff -> small enough to be
+            // returned; it is served in full, so the Range header is ignored
+            assertEquals( HttpURLConnection.HTTP_OK, connection.getResponseCode() );
+            assertNull( connection.getHeaderField( "Content-Range" ) );
+            assertTrue( connection.getContentType().contains( "java-archive-diff" ) );
+            byte[] body = readAll( connection.getInputStream() );
+            assertTrue( "jardiff body should be non-trivial", body.length > 0 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testAcceptEncodingBrotliServesPlain()
+            throws Exception
+    {
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/sample.jar" ).openConnection();
+        connection.setRequestMethod( "GET" );
+        connection.setRequestProperty( "Accept-Encoding", "br" );
+        connection.setRequestProperty( "Range", "bytes=10-19" );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            assertNull( connection.getHeaderField( "Content-Encoding" ) );
+            assertEquals( "bytes 10-19/1000", connection.getHeaderField( "Content-Range" ) );
+            assertContent( connection, 10, 10 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testGzipAcceptEncodingOnEmptyResource()
+            throws Exception
+    {
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/empty.jar" ).openConnection();
+        connection.setRequestMethod( "GET" );
+        connection.setRequestProperty( "Accept-Encoding", "gzip" );
+        connection.setRequestProperty( "Range", "bytes=0-9" );
+        connection.connect();
+        try
+        {
+            // no empty.jar.gz exists -> plain empty resource -> unsatisfiable
+            assertEquals( 416, connection.getResponseCode() );
+            assertEquals( "bytes */0", connection.getHeaderField( "Content-Range" ) );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testManySequentialVersionedRanges()
+            throws Exception
+    {
+        for ( int i = 0; i < 20; i++ )
+        {
+            int start = i * 10;
+            HttpURLConnection connection = open( "http://localhost:" + port + "/sample.jar?version-id=1.0",
+                                                 "bytes=" + start + "-" + ( start + 9 ) );
+            try
+            {
+                assertEquals( "iteration " + i, HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+                assertEquals( "bytes " + start + "-" + ( start + 9 ) + "/200",
+                              connection.getHeaderField( "Content-Range" ) );
+                assertSlice( connection, "sample__V1_0.jar", start, 10 );
+            }
+            finally
+            {
+                connection.disconnect();
+            }
+        }
+    }
+
+    public void testConcurrentIfRangeMatching()
+            throws Exception
+    {
+        String lastModified = getLastModified( "http://localhost:" + port + "/sample.jar" );
+
+        ExecutorService pool = Executors.newFixedThreadPool( 8 );
+        try
+        {
+            List<Future<byte[]>> futures = new ArrayList<>();
+            for ( int i = 0; i < 8; i++ )
+            {
+                final int start = i * 10;
+                futures.add( pool.submit( () -> {
+                    HttpURLConnection connection = (HttpURLConnection) new URL(
+                            "http://localhost:" + port + "/sample.jar" ).openConnection();
+                    connection.setRequestMethod( "GET" );
+                    connection.setRequestProperty( "Range", "bytes=" + start + "-" + ( start + 9 ) );
+                    connection.setRequestProperty( "If-Range", lastModified );
+                    connection.connect();
+                    try
+                    {
+                        assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+                        assertEquals( "bytes " + start + "-" + ( start + 9 ) + "/1000",
+                                      connection.getHeaderField( "Content-Range" ) );
+                        return readAll( connection.getInputStream() );
+                    }
+                    finally
+                    {
+                        connection.disconnect();
+                    }
+                } ) );
+            }
+            for ( int i = 0; i < 8; i++ )
+            {
+                byte[] part = futures.get( i ).get( 30, TimeUnit.SECONDS );
+                assertContentSlice( part, i * 10, 10 );
+            }
+        }
+        finally
+        {
+            pool.shutdownNow();
+        }
+    }
+
     public void testHeadRequestIgnoresRange()
             throws Exception
     {
@@ -4722,13 +4891,17 @@ public class JnlpDownloadServletIT
     private static void assertContent( HttpURLConnection connection, int start, int length )
             throws IOException
     {
-        byte[] actual = readAll( connection.getInputStream() );
+        assertContentSlice( readAll( connection.getInputStream() ), start, length );
+    }
+
+    private static void assertContentSlice( byte[] actual, int start, int length )
+    {
+        assertEquals( length, actual.length );
         byte[] expected = new byte[length];
         for ( int i = 0; i < length; i++ )
         {
             expected[i] = (byte) ( ( start + i ) % 256 );
         }
-        assertEquals( length, actual.length );
         assertTrue( "Unexpected body", Arrays.equals( expected, actual ) );
     }
 
