@@ -47,8 +47,8 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class ResourceCatalog
 {
@@ -58,7 +58,7 @@ public class ResourceCatalog
 
     private ServletContext _servletContext = null;
 
-    private HashMap _entries;
+    private ConcurrentHashMap<String, PathEntries> _entries;
 
     /**
      * Class to contain the information we know
@@ -113,23 +113,24 @@ public class ResourceCatalog
 
     public ResourceCatalog( ServletContext servletContext, Logger log )
     {
-        _entries = new HashMap();
+        _entries = new ConcurrentHashMap<>();
         _servletContext = servletContext;
         _log = log;
     }
 
 
-    public synchronized JnlpResource lookupResource( DownloadRequest dreq )
+    public JnlpResource lookupResource( DownloadRequest dreq )
             throws ErrorResponseException
     {
         // Split request up into path and name
         String path = dreq.getPath();
-        String name = null;
-        String dir = null;
+        String name;
+        String dir;
         int idx = path.lastIndexOf( '/' );
         if ( idx == -1 )
         {
             name = path;
+            dir = "/"; // request paths always start with '/', but be defensive
         }
         else
         {
@@ -137,21 +138,26 @@ public class ResourceCatalog
             dir = path.substring( 0, idx + 1 ); // Include '/'
         }
 
-        // Lookup up already parsed entries, and san directory for entries if neccesary
-        PathEntries pentries = (PathEntries) _entries.get( dir );
-        JnlpResource xmlVersionResPath = new JnlpResource( _servletContext, dir + VERSION_XML_FILENAME );
-        if ( pentries == null ||
-                ( xmlVersionResPath.exists() && xmlVersionResPath.getLastModified() > pentries.getLastModified() ) )
+        // Look up already parsed entries; re-scan the directory when there is
+        // no cached entry or version.xml is newer. ConcurrentHashMap.compute is
+        // atomic per directory, so readers of a cached entry never block and
+        // only lookups of the same directory race on a re-scan.
+        PathEntries pentries = _entries.compute( dir, ( key, current ) ->
         {
+            JnlpResource xmlVersionResPath = new JnlpResource( _servletContext, dir + VERSION_XML_FILENAME );
+            long versionLastModified = xmlVersionResPath.getLastModified();
+            if ( current != null && versionLastModified <= current.getLastModified() )
+            {
+                return current;
+            }
             _log.addInformational( "servlet.log.scandir", dir );
             List dirList = scanDirectory( dir, dreq );
             // Scan XML file
             List versionList = new ArrayList();
             List platformList = new ArrayList();
             parseVersionXML( versionList, platformList, dir, xmlVersionResPath );
-            pentries = new PathEntries( versionList, dirList, platformList, xmlVersionResPath.getLastModified() );
-            _entries.put( dir, pentries );
-        }
+            return new PathEntries( versionList, dirList, platformList, versionLastModified );
+        } );
 
         // Search for a match
         JnlpResource[] result = new JnlpResource[1];
