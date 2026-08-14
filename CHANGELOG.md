@@ -38,6 +38,8 @@ where practical for `-bravura` maintenance releases.
 - Added q-value, direct `.gz`/`.pack.gz` range, nested-path HEAD, empty-query, URL-fallback concurrency, sequential-suffix, text-file suffix, future-`If-Modified-Since`-on-HEAD, and content-type partial tests
 - A malformed `If-Modified-Since` date is now ignored instead of failing the request with `500` (RFC 7232 section 3.3)
 - Added tests for greater-than (`1.0+`) and wildcard (`1.*`) version constraints, empty `Range` headers, unit-only `Range` values, direct gzip access with q-zero encoding, mixed concurrent encoding requests, sequential open-ended ranges, and query-bearing JNLP requests
+- Integration tests now cover the `version.xml` platform-matching path (`platform-version-id`) end to end: range, full, suffix, unsatisfiable and HEAD responses on a platform-resolved resource, plus direct `version.xml` access being blocked
+- Added malformed `If-Range` and `If-Range`/`If-Modified-Since` on the URL-fallback path, `Accept-Encoding` q-values with spaces/extra params, tiny-file ranges, and a concurrent versioned+conditional request mix
 - Added locale-constrained versioned resources, case-sensitive and double-encoded path tests, `If-Range` on versioned resources, emoji filenames, versioned single-byte ranges, HEAD on versioned resources, and cross-directory concurrent versioned downloads
 - The `webstart-jnlp-servlet-it` binary fixtures are generated at test runtime instead of being committed; only the text `launch.jnlp` fixture is tracked
 - The streamed (non-NIO) range fallback for resources inside packaged JARs is now covered by integration tests via a second Undertow deployment

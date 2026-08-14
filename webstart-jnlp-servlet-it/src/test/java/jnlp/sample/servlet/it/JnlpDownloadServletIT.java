@@ -201,6 +201,8 @@ public class JnlpDownloadServletIT
         }
         writeFile( target, "data.txt", text );
 
+        writeFile( target, "tiny.jar", bytes( 10, 1 ) );
+
         // nested directory fixtures
         File libDir = new File( target, "lib" );
         if ( !libDir.isDirectory() && !libDir.mkdirs() )
@@ -209,6 +211,20 @@ public class JnlpDownloadServletIT
         }
         writeFile( libDir, "sample.jar", bytes( 1000, 1 ) );
         writeFile( libDir, "sample__V1_0.jar", bytes( 200, 5 ) );
+
+        // version.xml with a platform entry, exercising the ResourceCatalog
+        // version.xml parsing path
+        String versionXml = "<jnlp-versions>\n"
+                + "  <platform>\n"
+                + "    <pattern>\n"
+                + "      <name>sample.jar</name>\n"
+                + "      <version-id>1.0</version-id>\n"
+                + "    </pattern>\n"
+                + "    <file>sample__V1_0.jar</file>\n"
+                + "    <product-version-id>2.0</product-version-id>\n"
+                + "  </platform>\n"
+                + "</jnlp-versions>\n";
+        writeFile( libDir, "version.xml", versionXml.getBytes( StandardCharsets.UTF_8 ) );
     }
 
     private static byte[] bytes( int length, int multiplier )
@@ -3726,6 +3742,343 @@ public class JnlpDownloadServletIT
         finally
         {
             connection.disconnect();
+        }
+    }
+
+    public void testPlatformVersionedRange()
+            throws Exception
+    {
+        HttpURLConnection connection = open( "http://localhost:" + port +
+                "/lib/sample.jar?platform-version-id=1.0", "bytes=10-19" );
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            assertEquals( "2.0", connection.getHeaderField( "x-java-jnlp-version-id" ) );
+            assertEquals( "bytes 10-19/200", connection.getHeaderField( "Content-Range" ) );
+            assertSlice( connection, "lib/sample__V1_0.jar", 10, 10 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testPlatformVersionedFullDownload()
+            throws Exception
+    {
+        HttpURLConnection connection = open( "http://localhost:" + port +
+                "/lib/sample.jar?platform-version-id=1.0" );
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_OK, connection.getResponseCode() );
+            assertEquals( "2.0", connection.getHeaderField( "x-java-jnlp-version-id" ) );
+            assertEquals( "200", connection.getHeaderField( "Content-Length" ) );
+            assertSlice( connection, "lib/sample__V1_0.jar", 0, 200 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testPlatformVersionedUnsatisfiableRange()
+            throws Exception
+    {
+        HttpURLConnection connection = open( "http://localhost:" + port +
+                "/lib/sample.jar?platform-version-id=1.0", "bytes=500-600" );
+        try
+        {
+            assertEquals( 416, connection.getResponseCode() );
+            assertEquals( "bytes */200", connection.getHeaderField( "Content-Range" ) );
+            assertEquals( "2.0", connection.getHeaderField( "x-java-jnlp-version-id" ) );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testPlatformVersionedSuffixRange()
+            throws Exception
+    {
+        HttpURLConnection connection = open( "http://localhost:" + port +
+                "/lib/sample.jar?platform-version-id=1.0", "bytes=-10" );
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            assertEquals( "bytes 190-199/200", connection.getHeaderField( "Content-Range" ) );
+            assertSlice( connection, "lib/sample__V1_0.jar", 190, 10 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testHeadOnPlatformVersioned()
+            throws Exception
+    {
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/lib/sample.jar?platform-version-id=1.0" ).openConnection();
+        connection.setRequestMethod( "HEAD" );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_OK, connection.getResponseCode() );
+            assertEquals( "200", connection.getHeaderField( "Content-Length" ) );
+            assertEquals( "2.0", connection.getHeaderField( "x-java-jnlp-version-id" ) );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testDirectVersionXmlRequestIsBlocked()
+            throws Exception
+    {
+        HttpURLConnection connection = open( "http://localhost:" + port + "/lib/version.xml", "bytes=0-9" );
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_NOT_FOUND, connection.getResponseCode() );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testMalformedIfRangeDateIsIgnored()
+            throws Exception
+    {
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/sample.jar" ).openConnection();
+        connection.setRequestMethod( "GET" );
+        connection.setRequestProperty( "Range", "bytes=10-19" );
+        connection.setRequestProperty( "If-Range", "garbage" );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            assertEquals( "bytes 10-19/1000", connection.getHeaderField( "Content-Range" ) );
+            assertContent( connection, 10, 10 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testIfRangeMatchingOnUrlFallback()
+            throws Exception
+    {
+        String lastModified = getLastModified( "http://localhost:" + urlPort + "/strings.properties" );
+
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + urlPort + "/strings.properties" ).openConnection();
+        connection.setRequestMethod( "GET" );
+        connection.setRequestProperty( "Range", "bytes=0-9" );
+        connection.setRequestProperty( "If-Range", lastModified );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            byte[] full = readClasspathResource( "/jnlp/sample/servlet/resources/strings.properties" );
+            assertEquals( "bytes 0-9/" + full.length, connection.getHeaderField( "Content-Range" ) );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testIfRangeStaleOnUrlFallback()
+            throws Exception
+    {
+        byte[] full = readClasspathResource( "/jnlp/sample/servlet/resources/strings.properties" );
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + urlPort + "/strings.properties" ).openConnection();
+        connection.setRequestMethod( "GET" );
+        connection.setRequestProperty( "Range", "bytes=0-9" );
+        connection.setRequestProperty( "If-Range", "Wed, 01 Jan 2020 00:00:00 GMT" );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_OK, connection.getResponseCode() );
+            assertNull( connection.getHeaderField( "Content-Range" ) );
+            assertTrue( Arrays.equals( full, readAll( connection.getInputStream() ) ) );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testIfModifiedSinceMatchingOnUrlFallback()
+            throws Exception
+    {
+        String lastModified = getLastModified( "http://localhost:" + urlPort + "/strings.properties" );
+
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + urlPort + "/strings.properties" ).openConnection();
+        connection.setRequestMethod( "GET" );
+        connection.setRequestProperty( "If-Modified-Since", lastModified );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_NOT_MODIFIED, connection.getResponseCode() );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testRangeWithGzipQValueWithSpaces()
+            throws Exception
+    {
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/sample.jar" ).openConnection();
+        connection.setRequestMethod( "GET" );
+        connection.setRequestProperty( "Accept-Encoding", "gzip; q=0.5" );
+        connection.setRequestProperty( "Range", "bytes=10-19" );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            assertEquals( "gzip", connection.getHeaderField( "Content-Encoding" ) );
+            assertEquals( "bytes 10-19/" + fixtureLength( "sample.jar.gz" ),
+                          connection.getHeaderField( "Content-Range" ) );
+            assertGzipContent( connection, 10, 10 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testRangeOnTinyFile()
+            throws Exception
+    {
+        HttpURLConnection connection = open( "http://localhost:" + port + "/tiny.jar", "bytes=0-9" );
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            assertEquals( "bytes 0-9/10", connection.getHeaderField( "Content-Range" ) );
+            assertContent( connection, 0, 10 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testSuffixRangeOnTinyFile()
+            throws Exception
+    {
+        HttpURLConnection connection = open( "http://localhost:" + port + "/tiny.jar", "bytes=-5" );
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            assertEquals( "bytes 5-9/10", connection.getHeaderField( "Content-Range" ) );
+            assertContent( connection, 5, 5 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testUnsatisfiableRangeOnTinyFile()
+            throws Exception
+    {
+        HttpURLConnection connection = open( "http://localhost:" + port + "/tiny.jar", "bytes=10-" );
+        try
+        {
+            assertEquals( 416, connection.getResponseCode() );
+            assertEquals( "bytes */10", connection.getHeaderField( "Content-Range" ) );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testConcurrentVersionedAndConditionalRequests()
+            throws Exception
+    {
+        String lastModified = getLastModified( "http://localhost:" + port + "/sample.jar?version-id=1.0" );
+
+        ExecutorService pool = Executors.newFixedThreadPool( 8 );
+        try
+        {
+            List<Future<?>> futures = new ArrayList<>();
+            for ( int i = 0; i < 3; i++ )
+            {
+                futures.add( pool.submit( () -> {
+                    HttpURLConnection c = open(
+                            "http://localhost:" + port + "/sample.jar?version-id=1.0", "bytes=10-19" );
+                    try
+                    {
+                        assertEquals( HttpURLConnection.HTTP_PARTIAL, c.getResponseCode() );
+                        assertEquals( "1_0", c.getHeaderField( "x-java-jnlp-version-id" ) );
+                        return null;
+                    }
+                    finally
+                    {
+                        c.disconnect();
+                    }
+                } ) );
+            }
+            for ( int i = 0; i < 3; i++ )
+            {
+                futures.add( pool.submit( () -> {
+                    HttpURLConnection c = (HttpURLConnection) new URL(
+                            "http://localhost:" + port + "/sample.jar?version-id=1.0" ).openConnection();
+                    c.setRequestMethod( "GET" );
+                    c.setRequestProperty( "If-Modified-Since", lastModified );
+                    c.connect();
+                    try
+                    {
+                        assertEquals( HttpURLConnection.HTTP_NOT_MODIFIED, c.getResponseCode() );
+                        return null;
+                    }
+                    finally
+                    {
+                        c.disconnect();
+                    }
+                } ) );
+            }
+            for ( int i = 0; i < 2; i++ )
+            {
+                futures.add( pool.submit( () -> {
+                    HttpURLConnection c = (HttpURLConnection) new URL(
+                            "http://localhost:" + port + "/sample.jar?version-id=1.0" ).openConnection();
+                    c.setRequestMethod( "GET" );
+                    c.setRequestProperty( "Range", "bytes=10-19" );
+                    c.setRequestProperty( "If-Range", lastModified );
+                    c.connect();
+                    try
+                    {
+                        assertEquals( HttpURLConnection.HTTP_PARTIAL, c.getResponseCode() );
+                        assertEquals( "bytes 10-19/200", c.getHeaderField( "Content-Range" ) );
+                        return null;
+                    }
+                    finally
+                    {
+                        c.disconnect();
+                    }
+                } ) );
+            }
+
+            for ( Future<?> future : futures )
+            {
+                future.get( 30, TimeUnit.SECONDS );
+            }
+        }
+        finally
+        {
+            pool.shutdownNow();
         }
     }
 

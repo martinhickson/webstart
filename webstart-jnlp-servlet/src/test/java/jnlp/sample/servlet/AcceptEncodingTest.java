@@ -78,4 +78,28 @@ public class AcceptEncodingTest
         assertFalse( JnlpResource.acceptsCoding( "gzip;q=0, gzip;q=1", GZIP ) );
         assertTrue( JnlpResource.acceptsCoding( "gzip;q=1, gzip;q=0", GZIP ) );
     }
+
+    public void testSpaceBeforeQParam()
+    {
+        assertFalse( JnlpResource.acceptsCoding( "gzip; q=0", GZIP ) );
+        assertFalse( JnlpResource.acceptsCoding( "gzip ; q=0", GZIP ) );
+        assertTrue( JnlpResource.acceptsCoding( "gzip ; q=0.5", GZIP ) );
+    }
+
+    public void testTabBeforeQParam()
+    {
+        assertFalse( JnlpResource.acceptsCoding( "gzip;\tq=0", GZIP ) );
+    }
+
+    public void testExtraParamsIgnored()
+    {
+        assertTrue( JnlpResource.acceptsCoding( "gzip;q=0.5;foo=bar", GZIP ) );
+        assertFalse( JnlpResource.acceptsCoding( "gzip;foo=bar;q=0", GZIP ) );
+    }
+
+    public void testHeaderWithTrailingComma()
+    {
+        assertTrue( JnlpResource.acceptsCoding( "gzip,", GZIP ) );
+        assertFalse( JnlpResource.acceptsCoding( "br,", GZIP ) );
+    }
 }
