@@ -152,9 +152,9 @@ public class JnlpResource
 
                 boolean found = false;
                 // pack200 compression
-                if ( encoding != null && _mimeType != null &&
+                if ( _mimeType != null &&
                         ( _mimeType.compareTo( JAR_MIME_TYPE ) == 0 || _mimeType.compareTo( JAR_MIME_TYPE_NEW ) == 0 ) &&
-                        encoding.toLowerCase().contains( DownloadResponse.PACK200_GZIP_ENCODING ) )
+                        acceptsCoding( encoding, DownloadResponse.PACK200_GZIP_ENCODING ) )
                 {
                     search_path = orig_path + ".pack.gz";
                     _resource = context.getResource( search_path );
@@ -175,8 +175,7 @@ public class JnlpResource
                 }
 
                 // gzip compression
-                if ( !found && encoding != null &&
-                        encoding.toLowerCase().contains( DownloadResponse.GZIP_ENCODING ) )
+                if ( !found && acceptsCoding( encoding, DownloadResponse.GZIP_ENCODING ) )
                 {
                     search_path = orig_path + ".gz";
                     _resource = context.getResource( search_path );
@@ -222,6 +221,56 @@ public class JnlpResource
         {
             _resource = null;
         }
+    }
+
+    /**
+     * Checks whether an {@code Accept-Encoding} header permits the given
+     * content coding, honouring q-values (RFC 7231 section 5.3.4). The coding
+     * is served only when it is explicitly listed with a q-value greater than
+     * zero; an absent header, {@code identity} or a bare {@code *} do not
+     * enable compressed variants.
+     *
+     * @param header the raw {@code Accept-Encoding} header, or {@code null}
+     * @param coding the content coding to look for (e.g. {@code gzip})
+     * @return {@code true} if the coding is acceptable
+     */
+    static boolean acceptsCoding( String header, String coding )
+    {
+        if ( header == null )
+        {
+            return false;
+        }
+        String target = coding.toLowerCase();
+        for ( String token : header.split( "," ) )
+        {
+            String value = token.trim();
+            double q = 1.0;
+            int semi = value.indexOf( ';' );
+            if ( semi != -1 )
+            {
+                for ( String param : value.substring( semi + 1 ).split( ";" ) )
+                {
+                    param = param.trim();
+                    if ( param.startsWith( "q=" ) )
+                    {
+                        try
+                        {
+                            q = Double.parseDouble( param.substring( 2 ) );
+                        }
+                        catch ( NumberFormatException nfe )
+                        {
+                            q = 0; // malformed q-value: treat as not acceptable
+                        }
+                    }
+                }
+                value = value.substring( 0, semi ).trim();
+            }
+            if ( value.equalsIgnoreCase( target ) )
+            {
+                return q > 0;
+            }
+        }
+        return false;
     }
 
     long getLastModified( ServletContext context, URL resource, String path )

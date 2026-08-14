@@ -3114,6 +3114,307 @@ public class JnlpDownloadServletIT
         }
     }
 
+    public void testQZeroGzipServesPlain()
+            throws Exception
+    {
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/sample.jar" ).openConnection();
+        connection.setRequestMethod( "GET" );
+        connection.setRequestProperty( "Accept-Encoding", "gzip;q=0" );
+        connection.setRequestProperty( "Range", "bytes=10-19" );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            assertNull( connection.getHeaderField( "Content-Encoding" ) );
+            assertEquals( "bytes 10-19/1000", connection.getHeaderField( "Content-Range" ) );
+            assertContent( connection, 10, 10 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testPack200QZeroServesPlain()
+            throws Exception
+    {
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/sample.jar" ).openConnection();
+        connection.setRequestMethod( "GET" );
+        connection.setRequestProperty( "Accept-Encoding", "pack200-gzip;q=0" );
+        connection.setRequestProperty( "Range", "bytes=10-19" );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            assertNull( connection.getHeaderField( "Content-Encoding" ) );
+            assertEquals( "bytes 10-19/1000", connection.getHeaderField( "Content-Range" ) );
+            assertContent( connection, 10, 10 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testQZeroGzipWithPack200AcceptedServesPack200()
+            throws Exception
+    {
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/sample.jar" ).openConnection();
+        connection.setRequestMethod( "GET" );
+        connection.setRequestProperty( "Accept-Encoding", "gzip;q=0, pack200-gzip" );
+        connection.setRequestProperty( "Range", "bytes=10-19" );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            assertEquals( "pack200-gzip", connection.getHeaderField( "Content-Encoding" ) );
+            assertEquals( "bytes 10-19/200", connection.getHeaderField( "Content-Range" ) );
+            assertSlice( connection, "sample.jar.pack.gz", 10, 10 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testPack200QZeroWithGzipAcceptedServesGzip()
+            throws Exception
+    {
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/sample.jar" ).openConnection();
+        connection.setRequestMethod( "GET" );
+        connection.setRequestProperty( "Accept-Encoding", "pack200-gzip;q=0, gzip" );
+        connection.setRequestProperty( "Range", "bytes=10-19" );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            assertEquals( "gzip", connection.getHeaderField( "Content-Encoding" ) );
+            assertEquals( "bytes 10-19/" + fixtureLength( "sample.jar.gz" ),
+                          connection.getHeaderField( "Content-Range" ) );
+            assertGzipContent( connection, 10, 10 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testDirectRangeOnGzipFile()
+            throws Exception
+    {
+        HttpURLConnection connection = open( "http://localhost:" + port + "/sample.jar.gz", "bytes=10-19" );
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            assertEquals( "gzip", connection.getHeaderField( "Content-Encoding" ) );
+            assertEquals( "bytes 10-19/" + fixtureLength( "sample.jar.gz" ),
+                          connection.getHeaderField( "Content-Range" ) );
+            assertGzipContent( connection, 10, 10 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testDirectRangeOnPack200File()
+            throws Exception
+    {
+        HttpURLConnection connection = open( "http://localhost:" + port + "/sample.jar.pack.gz", "bytes=10-19" );
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            assertEquals( "pack200-gzip", connection.getHeaderField( "Content-Encoding" ) );
+            assertEquals( "bytes 10-19/200", connection.getHeaderField( "Content-Range" ) );
+            assertSlice( connection, "sample.jar.pack.gz", 10, 10 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testHeadOnNestedPath()
+            throws Exception
+    {
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/lib/sample.jar" ).openConnection();
+        connection.setRequestMethod( "HEAD" );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_OK, connection.getResponseCode() );
+            assertEquals( "1000", connection.getHeaderField( "Content-Length" ) );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testEmptyQueryStringRange()
+            throws Exception
+    {
+        HttpURLConnection connection = open( "http://localhost:" + port + "/sample.jar?", "bytes=10-19" );
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            assertEquals( "bytes 10-19/1000", connection.getHeaderField( "Content-Range" ) );
+            assertContent( connection, 10, 10 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testConcurrentUrlFallbackRanges()
+            throws Exception
+    {
+        byte[] full = readClasspathResource( "/jnlp/sample/servlet/resources/strings.properties" );
+        ExecutorService pool = Executors.newFixedThreadPool( 8 );
+        try
+        {
+            List<Future<byte[]>> futures = new ArrayList<>();
+            for ( int i = 0; i < 8; i++ )
+            {
+                final int start = i * 10;
+                futures.add( pool.submit( () -> {
+                    HttpURLConnection connection = open(
+                            "http://localhost:" + urlPort + "/strings.properties",
+                            "bytes=" + start + "-" + ( start + 9 ) );
+                    try
+                    {
+                        assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+                        assertEquals( "bytes " + start + "-" + ( start + 9 ) + "/" + full.length,
+                                      connection.getHeaderField( "Content-Range" ) );
+                        return readAll( connection.getInputStream() );
+                    }
+                    finally
+                    {
+                        connection.disconnect();
+                    }
+                } ) );
+            }
+            for ( int i = 0; i < 8; i++ )
+            {
+                byte[] part = futures.get( i ).get( 30, TimeUnit.SECONDS );
+                assertTrue( Arrays.equals( Arrays.copyOfRange( full, i * 10, i * 10 + 10 ), part ) );
+            }
+        }
+        finally
+        {
+            pool.shutdownNow();
+        }
+    }
+
+    public void testManySequentialSuffixRanges()
+            throws Exception
+    {
+        for ( int i = 0; i < 20; i++ )
+        {
+            HttpURLConnection connection = open( "http://localhost:" + port + "/sample.jar", "bytes=-20" );
+            try
+            {
+                assertEquals( "iteration " + i, HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+                assertEquals( "bytes 980-999/1000", connection.getHeaderField( "Content-Range" ) );
+                assertContent( connection, 980, 20 );
+            }
+            finally
+            {
+                connection.disconnect();
+            }
+        }
+    }
+
+    public void testSuffixRangeOnNestedPath()
+            throws Exception
+    {
+        HttpURLConnection connection = open( "http://localhost:" + port + "/lib/sample.jar", "bytes=-10" );
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            assertEquals( "bytes 990-999/1000", connection.getHeaderField( "Content-Range" ) );
+            assertContent( connection, 990, 10 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testFutureIfModifiedSinceOnHead()
+            throws Exception
+    {
+        String future = httpDate( System.currentTimeMillis() + 60000 );
+
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/sample.jar" ).openConnection();
+        connection.setRequestMethod( "HEAD" );
+        connection.setRequestProperty( "If-Modified-Since", future );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_NOT_MODIFIED, connection.getResponseCode() );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testContentTypeOnPartial()
+            throws Exception
+    {
+        HttpURLConnection connection = open( "http://localhost:" + port + "/sample.jar", "bytes=10-19" );
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            assertNotNull( connection.getContentType() );
+            assertTrue( connection.getContentType().contains( "java-archive" ) );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testRangeOnTextFileSuffix()
+            throws Exception
+    {
+        HttpURLConnection connection = open( "http://localhost:" + port + "/data.txt", "bytes=-10" );
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            assertEquals( "bytes 90-99/100", connection.getHeaderField( "Content-Range" ) );
+            assertSlice( connection, "data.txt", 90, 10 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testRangeOnPlusPathWithQuery()
+            throws Exception
+    {
+        HttpURLConnection connection = open( "http://localhost:" + port + "/plus+minus.jar?x=1", "bytes=10-19" );
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            assertEquals( "bytes 10-19/1000", connection.getHeaderField( "Content-Range" ) );
+            assertContent( connection, 10, 10 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
     public void testHeadRequestIgnoresRange()
             throws Exception
     {
