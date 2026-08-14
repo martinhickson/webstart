@@ -40,6 +40,8 @@ where practical for `-bravura` maintenance releases.
 - Added tests for greater-than (`1.0+`) and wildcard (`1.*`) version constraints, empty `Range` headers, unit-only `Range` values, direct gzip access with q-zero encoding, mixed concurrent encoding requests, sequential open-ended ranges, and query-bearing JNLP requests
 - Integration tests now cover the `version.xml` platform-matching path (`platform-version-id`) end to end: range, full, suffix, unsatisfiable and HEAD responses on a platform-resolved resource, plus direct `version.xml` access being blocked
 - Added malformed `If-Range` and `If-Range`/`If-Modified-Since` on the URL-fallback path, `Accept-Encoding` q-values with spaces/extra params, tiny-file ranges, and a concurrent versioned+conditional request mix
+- The `version.xml` `<resource>` entry path is now covered end to end: virtual resources (`other.jar`, os-constrained `osjar.jar`) resolved purely through `version.xml`, with range, unsatisfiable, HEAD, os-match and os-no-match tests
+- Added hash-in-filename (`%23`), NUL-byte path rejection, version lookup on the URL-fallback server, platform no-match error, HEAD on a tiny file, and empty `Accept-Encoding` tests
 - Added locale-constrained versioned resources, case-sensitive and double-encoded path tests, `If-Range` on versioned resources, emoji filenames, versioned single-byte ranges, HEAD on versioned resources, and cross-directory concurrent versioned downloads
 - The `webstart-jnlp-servlet-it` binary fixtures are generated at test runtime instead of being committed; only the text `launch.jnlp` fixture is tracked
 - The streamed (non-NIO) range fallback for resources inside packaged JARs is now covered by integration tests via a second Undertow deployment

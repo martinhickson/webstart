@@ -202,6 +202,7 @@ public class JnlpDownloadServletIT
         writeFile( target, "data.txt", text );
 
         writeFile( target, "tiny.jar", bytes( 10, 1 ) );
+        writeFile( target, "hash#file.jar", bytes( 1000, 1 ) );
 
         // nested directory fixtures
         File libDir = new File( target, "lib" );
@@ -212,9 +213,26 @@ public class JnlpDownloadServletIT
         writeFile( libDir, "sample.jar", bytes( 1000, 1 ) );
         writeFile( libDir, "sample__V1_0.jar", bytes( 200, 5 ) );
 
-        // version.xml with a platform entry, exercising the ResourceCatalog
-        // version.xml parsing path
+        // version.xml exercising the ResourceCatalog parsing path with a
+        // resource entry, an os-constrained resource entry, and a platform
+        // entry. other.jar / osjar.jar have no physical file and are served
+        // purely via the version.xml mapping.
         String versionXml = "<jnlp-versions>\n"
+                + "  <resource>\n"
+                + "    <pattern>\n"
+                + "      <name>other.jar</name>\n"
+                + "      <version-id>3.0</version-id>\n"
+                + "    </pattern>\n"
+                + "    <file>sample__V1_0.jar</file>\n"
+                + "  </resource>\n"
+                + "  <resource>\n"
+                + "    <pattern>\n"
+                + "      <name>osjar.jar</name>\n"
+                + "      <version-id>1.0</version-id>\n"
+                + "      <os>linux</os>\n"
+                + "    </pattern>\n"
+                + "    <file>sample__V1_0.jar</file>\n"
+                + "  </resource>\n"
                 + "  <platform>\n"
                 + "    <pattern>\n"
                 + "      <name>sample.jar</name>\n"
@@ -4079,6 +4097,194 @@ public class JnlpDownloadServletIT
         finally
         {
             pool.shutdownNow();
+        }
+    }
+
+    public void testVersionXmlResourceEntryRange()
+            throws Exception
+    {
+        HttpURLConnection connection = open( "http://localhost:" + port +
+                "/lib/other.jar?version-id=3.0", "bytes=10-19" );
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            assertEquals( "3.0", connection.getHeaderField( "x-java-jnlp-version-id" ) );
+            assertEquals( "bytes 10-19/200", connection.getHeaderField( "Content-Range" ) );
+            assertSlice( connection, "lib/sample__V1_0.jar", 10, 10 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testVersionXmlResourceEntryUnsatisfiable()
+            throws Exception
+    {
+        HttpURLConnection connection = open( "http://localhost:" + port +
+                "/lib/other.jar?version-id=3.0", "bytes=500-600" );
+        try
+        {
+            assertEquals( 416, connection.getResponseCode() );
+            assertEquals( "bytes */200", connection.getHeaderField( "Content-Range" ) );
+            assertEquals( "3.0", connection.getHeaderField( "x-java-jnlp-version-id" ) );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testVersionXmlResourceEntryHead()
+            throws Exception
+    {
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/lib/other.jar?version-id=3.0" ).openConnection();
+        connection.setRequestMethod( "HEAD" );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_OK, connection.getResponseCode() );
+            assertEquals( "200", connection.getHeaderField( "Content-Length" ) );
+            assertEquals( "3.0", connection.getHeaderField( "x-java-jnlp-version-id" ) );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testVersionXmlResourceEntryOsMatch()
+            throws Exception
+    {
+        HttpURLConnection connection = open( "http://localhost:" + port +
+                "/lib/osjar.jar?version-id=1.0&os=linux", "bytes=10-19" );
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            assertEquals( "1.0", connection.getHeaderField( "x-java-jnlp-version-id" ) );
+            assertEquals( "bytes 10-19/200", connection.getHeaderField( "Content-Range" ) );
+            assertSlice( connection, "lib/sample__V1_0.jar", 10, 10 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testVersionXmlResourceEntryOsNoMatch()
+            throws Exception
+    {
+        HttpURLConnection connection = open( "http://localhost:" + port + "/lib/osjar.jar?version-id=1.0" );
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_OK, connection.getResponseCode() );
+            assertTrue( connection.getContentType().contains( "x-java-jnlp-error" ) );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testRangeOnHashFilename()
+            throws Exception
+    {
+        HttpURLConnection connection = open( "http://localhost:" + port + "/hash%23file.jar", "bytes=10-19" );
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            assertEquals( "bytes 10-19/1000", connection.getHeaderField( "Content-Range" ) );
+            assertContent( connection, 10, 10 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testNullBytePathRejected()
+            throws Exception
+    {
+        HttpURLConnection connection = open( "http://localhost:" + port + "/sample%00.jar", "bytes=0-9" );
+        try
+        {
+            assertNotServed( "null byte path", connection );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testVersionLookupOnUrlFallbackReturnsError()
+            throws Exception
+    {
+        HttpURLConnection connection = open( "http://localhost:" + urlPort + "/strings.properties?version-id=1.0" );
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_OK, connection.getResponseCode() );
+            assertTrue( connection.getContentType().contains( "x-java-jnlp-error" ) );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testPlatformVersionIdNoMatchReturnsError()
+            throws Exception
+    {
+        HttpURLConnection connection = open( "http://localhost:" + port +
+                "/lib/sample.jar?platform-version-id=9.9", "bytes=0-9" );
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_OK, connection.getResponseCode() );
+            assertTrue( connection.getContentType().contains( "x-java-jnlp-error" ) );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testHeadOnTinyFile()
+            throws Exception
+    {
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/tiny.jar" ).openConnection();
+        connection.setRequestMethod( "HEAD" );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_OK, connection.getResponseCode() );
+            assertEquals( "10", connection.getHeaderField( "Content-Length" ) );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testEmptyAcceptEncodingServesPlain()
+            throws Exception
+    {
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/sample.jar" ).openConnection();
+        connection.setRequestMethod( "GET" );
+        connection.setRequestProperty( "Accept-Encoding", "" );
+        connection.setRequestProperty( "Range", "bytes=10-19" );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            assertNull( connection.getHeaderField( "Content-Encoding" ) );
+            assertEquals( "bytes 10-19/1000", connection.getHeaderField( "Content-Range" ) );
+            assertContent( connection, 10, 10 );
+        }
+        finally
+        {
+            connection.disconnect();
         }
     }
 
