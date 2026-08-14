@@ -72,6 +72,14 @@ abstract public class DownloadResponse
 
     private static final String HEADER_VARY = "Vary";
 
+    private static final String HEADER_CACHE_CONTROL = "Cache-Control";
+
+    /**
+     * Signed WebStart jars must not be re-encoded by intermediaries, which
+     * would break their signatures (RFC 7234 section 5.2.1.6).
+     */
+    private static final String CACHE_CONTROL_NO_TRANSFORM = "no-transform";
+
     private static final String BYTES_RANGE_UNIT = "bytes";
 
     private static final String JNLP_ERROR_MIMETYPE = "application/x-java-jnlp-error";
@@ -401,6 +409,7 @@ abstract public class DownloadResponse
             response.setHeader( HEADER_CONTENT_RANGE, BYTES_RANGE_UNIT + " */" + _contentLength );
             response.setHeader( HEADER_ETAG, computeETag( _contentLength, _lastModified ) );
             response.setHeader( HEADER_VARY, "Accept-Encoding" );
+            response.setHeader( HEADER_CACHE_CONTROL, CACHE_CONTROL_NO_TRANSFORM );
             if ( _versionId != null )
             {
                 response.setHeader( HEADER_JNLP_VERSION, _versionId );
@@ -447,6 +456,7 @@ abstract public class DownloadResponse
             response.setHeader( HEADER_ACCEPT_RANGES, BYTES_RANGE_UNIT );
             response.setHeader( HEADER_ETAG, computeETag( _contentLength, _lastModified ) );
             response.setHeader( HEADER_VARY, "Accept-Encoding" );
+            response.setHeader( HEADER_CACHE_CONTROL, CACHE_CONTROL_NO_TRANSFORM );
             if ( _versionId != null )
             {
                 response.setHeader( HEADER_JNLP_VERSION, _versionId );
@@ -572,6 +582,7 @@ abstract public class DownloadResponse
             response.setHeader( HEADER_ACCEPT_RANGES, BYTES_RANGE_UNIT );
             response.setHeader( HEADER_ETAG, computeETag( length, getLastModified() ) );
             response.setHeader( HEADER_VARY, "Accept-Encoding" );
+            response.setHeader( HEADER_CACHE_CONTROL, CACHE_CONTROL_NO_TRANSFORM );
             if ( getVersionId() != null )
             {
                 response.setHeader( HEADER_JNLP_VERSION, getVersionId() );
@@ -894,6 +905,7 @@ abstract public class DownloadResponse
             response.setHeader( HEADER_ACCEPT_RANGES, BYTES_RANGE_UNIT );
             response.setHeader( HEADER_ETAG, computeETag( totalLength, _lastModified ) );
             response.setHeader( HEADER_VARY, "Accept-Encoding" );
+            response.setHeader( HEADER_CACHE_CONTROL, CACHE_CONTROL_NO_TRANSFORM );
             if ( _versionId != null )
             {
                 response.setHeader( HEADER_JNLP_VERSION, _versionId );

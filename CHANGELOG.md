@@ -55,6 +55,8 @@ where practical for `-bravura` maintenance releases.
 - Multiple satisfiable byte ranges now return a `multipart/byteranges` 206 (RFC 7233 section 4.1) via `HttpRange.parseAll`; a request with any unsatisfiable or mixed-unit range returns `416`. Each part is streamed from the file via `FileChannel`
 - File responses advertise `Vary: Accept-Encoding` (RFC 7231 section 7.1.4) since the representation depends on the `Accept-Encoding` negotiation
 - Added `parseAll` unit tests plus integration tests for multipart responses (plain, versioned, gzip variant), multipart rejection on unsatisfiable ranges, and `Vary`
+- File responses advertise `Cache-Control: no-transform` (RFC 7234 section 5.2.1.6) so intermediaries do not re-encode signed WebStart jars and break their signatures
+- Added tests for `Cache-Control`, URL-fallback multipart, multipart on empty/huge resources, `If-Range` with multipart, multipart ETag/`Vary`, concurrent multipart, HEAD on multipart requests, `If-Match: *`, and `Vary` on gzip variants
 - Added jardiff cache-invalidation, `If-None-Match`-ignored, query-parameter-order, concurrent jardiff, and HEAD-on-jardiff-source tests
 - Added locale-constrained versioned resources, case-sensitive and double-encoded path tests, `If-Range` on versioned resources, emoji filenames, versioned single-byte ranges, HEAD on versioned resources, and cross-directory concurrent versioned downloads
 - The `webstart-jnlp-servlet-it` binary fixtures are generated at test runtime instead of being committed; only the text `launch.jnlp` fixture is tracked

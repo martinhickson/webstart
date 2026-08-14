@@ -5786,6 +5786,246 @@ public class JnlpDownloadServletIT
         }
     }
 
+    public void testCacheControlNoTransformOnFileResponses()
+            throws Exception
+    {
+        HttpURLConnection full = open( "http://localhost:" + port + "/sample.jar" );
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_OK, full.getResponseCode() );
+            assertEquals( "no-transform", full.getHeaderField( "Cache-Control" ) );
+        }
+        finally
+        {
+            full.disconnect();
+        }
+
+        HttpURLConnection partial = open( "http://localhost:" + port + "/sample.jar", "bytes=10-19" );
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, partial.getResponseCode() );
+            assertEquals( "no-transform", partial.getHeaderField( "Cache-Control" ) );
+        }
+        finally
+        {
+            partial.disconnect();
+        }
+
+        HttpURLConnection unsatisfiable = open( "http://localhost:" + port + "/sample.jar", "bytes=5000-6000" );
+        try
+        {
+            assertEquals( 416, unsatisfiable.getResponseCode() );
+            assertEquals( "no-transform", unsatisfiable.getHeaderField( "Cache-Control" ) );
+        }
+        finally
+        {
+            unsatisfiable.disconnect();
+        }
+    }
+
+    public void testMultipartOnUrlFallback()
+            throws Exception
+    {
+        byte[] full = readClasspathResource( "/jnlp/sample/servlet/resources/strings.properties" );
+        List<byte[]> parts = fetchMultipart( "http://localhost:" + urlPort + "/strings.properties",
+                                             "bytes=0-9,20-29" );
+        assertEquals( 2, parts.size() );
+        assertTrue( Arrays.equals( Arrays.copyOfRange( full, 0, 10 ), parts.get( 0 ) ) );
+        assertTrue( Arrays.equals( Arrays.copyOfRange( full, 20, 30 ), parts.get( 1 ) ) );
+    }
+
+    public void testMultipartOnEmptyResourceRejected()
+            throws Exception
+    {
+        HttpURLConnection connection = open( "http://localhost:" + port + "/empty.jar", "bytes=0-9,20-29" );
+        try
+        {
+            assertEquals( 416, connection.getResponseCode() );
+            assertEquals( "bytes */0", connection.getHeaderField( "Content-Range" ) );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testMultipartUnsatisfiableWithSuffix()
+            throws Exception
+    {
+        HttpURLConnection connection = open( "http://localhost:" + port + "/sample.jar", "bytes=-5,5000-6000" );
+        try
+        {
+            assertEquals( 416, connection.getResponseCode() );
+            assertEquals( "bytes */1000", connection.getHeaderField( "Content-Range" ) );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testIfRangeMatchingWithMultipart()
+            throws Exception
+    {
+        String etag = getEtag( "http://localhost:" + port + "/sample.jar" );
+
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/sample.jar" ).openConnection();
+        connection.setRequestMethod( "GET" );
+        connection.setRequestProperty( "Range", "bytes=0-9,20-29" );
+        connection.setRequestProperty( "If-Range", etag );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            String contentType = connection.getHeaderField( "Content-Type" );
+            assertTrue( contentType.startsWith( "multipart/byteranges" ) );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testIfRangeStaleWithMultipartServesFull()
+            throws Exception
+    {
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/sample.jar" ).openConnection();
+        connection.setRequestMethod( "GET" );
+        connection.setRequestProperty( "Range", "bytes=0-9,20-29" );
+        connection.setRequestProperty( "If-Range", "\"stale-etag\"" );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_OK, connection.getResponseCode() );
+            assertNull( connection.getHeaderField( "Content-Range" ) );
+            assertContent( connection, 0, 1000 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testMultipartOnHugeFile()
+            throws Exception
+    {
+        List<byte[]> parts = fetchMultipart( "http://localhost:" + port + "/huge.bin", "bytes=0-0,1-1" );
+        assertEquals( 2, parts.size() );
+        assertZeroBytes( parts.get( 0 ), 1 );
+        assertZeroBytes( parts.get( 1 ), 1 );
+    }
+
+    public void testMultipartEtagAndVaryPresent()
+            throws Exception
+    {
+        String etag = getEtag( "http://localhost:" + port + "/sample.jar" );
+
+        HttpURLConnection connection = open( "http://localhost:" + port + "/sample.jar", "bytes=0-9,20-29" );
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            assertEquals( etag, connection.getHeaderField( "ETag" ) );
+            assertEquals( "Accept-Encoding", connection.getHeaderField( "Vary" ) );
+            assertEquals( "no-transform", connection.getHeaderField( "Cache-Control" ) );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testConcurrentMultipartRequests()
+            throws Exception
+    {
+        ExecutorService pool = Executors.newFixedThreadPool( 8 );
+        try
+        {
+            List<Future<?>> futures = new ArrayList<>();
+            for ( int i = 0; i < 4; i++ )
+            {
+                futures.add( pool.submit( () -> {
+                    List<byte[]> parts = fetchMultipart(
+                            "http://localhost:" + port + "/sample.jar", "bytes=0-9,20-29" );
+                    assertEquals( 2, parts.size() );
+                    assertContentSlice( parts.get( 0 ), 0, 10 );
+                    assertContentSlice( parts.get( 1 ), 20, 10 );
+                    return null;
+                } ) );
+            }
+            for ( Future<?> future : futures )
+            {
+                future.get( 30, TimeUnit.SECONDS );
+            }
+        }
+        finally
+        {
+            pool.shutdownNow();
+        }
+    }
+
+    public void testHeadOnMultipartRequest()
+            throws Exception
+    {
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/sample.jar" ).openConnection();
+        connection.setRequestMethod( "HEAD" );
+        connection.setRequestProperty( "Range", "bytes=0-9,20-29" );
+        connection.connect();
+        try
+        {
+            // HEAD ignores Range entirely and returns the full-resource headers
+            assertEquals( HttpURLConnection.HTTP_OK, connection.getResponseCode() );
+            assertEquals( "1000", connection.getHeaderField( "Content-Length" ) );
+            assertNull( connection.getHeaderField( "Content-Range" ) );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testIfMatchWildcardServesContent()
+            throws Exception
+    {
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/sample.jar" ).openConnection();
+        connection.setRequestMethod( "GET" );
+        connection.setRequestProperty( "If-Match", "*" );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_OK, connection.getResponseCode() );
+            assertContent( connection, 0, 1000 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testVaryOnGzipVariant()
+            throws Exception
+    {
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/sample.jar" ).openConnection();
+        connection.setRequestMethod( "GET" );
+        connection.setRequestProperty( "Accept-Encoding", "gzip" );
+        connection.setRequestProperty( "Range", "bytes=10-19" );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            assertEquals( "Accept-Encoding", connection.getHeaderField( "Vary" ) );
+            assertEquals( "gzip", connection.getHeaderField( "Content-Encoding" ) );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
     public void testHeadRequestIgnoresRange()
             throws Exception
     {
@@ -6005,7 +6245,11 @@ public class JnlpDownloadServletIT
     private static void assertZeroContent( HttpURLConnection connection, int length )
             throws IOException
     {
-        byte[] actual = readAll( connection.getInputStream() );
+        assertZeroBytes( readAll( connection.getInputStream() ), length );
+    }
+
+    private static void assertZeroBytes( byte[] actual, int length )
+    {
         assertEquals( length, actual.length );
         for ( byte value : actual )
         {
