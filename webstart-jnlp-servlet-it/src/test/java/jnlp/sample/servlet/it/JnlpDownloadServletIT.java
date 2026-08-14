@@ -4484,6 +4484,153 @@ public class JnlpDownloadServletIT
         }
     }
 
+    public void testHeadWithEncodingAndMatchingIfModifiedSince()
+            throws Exception
+    {
+        String lastModified = getLastModifiedWithEncoding( "http://localhost:" + port + "/sample.jar", "gzip" );
+
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/sample.jar" ).openConnection();
+        connection.setRequestMethod( "HEAD" );
+        connection.setRequestProperty( "Accept-Encoding", "gzip" );
+        connection.setRequestProperty( "If-Modified-Since", lastModified );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_NOT_MODIFIED, connection.getResponseCode() );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testLastModifiedOnGzipPartialEqualsVariantMtime()
+            throws Exception
+    {
+        String gzipLastModified = getLastModifiedWithEncoding( "http://localhost:" + port + "/sample.jar", "gzip" );
+
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/sample.jar" ).openConnection();
+        connection.setRequestMethod( "GET" );
+        connection.setRequestProperty( "Accept-Encoding", "gzip" );
+        connection.setRequestProperty( "Range", "bytes=10-19" );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            assertEquals( gzipLastModified, connection.getHeaderField( "Last-Modified" ) );
+            assertGzipContent( connection, 10, 10 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testSemicolonPathIsNotServed()
+            throws Exception
+    {
+        HttpURLConnection connection = open( "http://localhost:" + port + "/sample.jar;jsessionid=abc",
+                                             "bytes=0-9" );
+        try
+        {
+            // the servlet path keeps the ;jsessionid suffix, which does not
+            // match any resource
+            assertNotServed( "jsessionid path", connection );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testConditionalOnVersionedPack200Variant()
+            throws Exception
+    {
+        String lastModified = getLastModifiedWithEncoding(
+                "http://localhost:" + port + "/sample.jar?version-id=1.0", "pack200-gzip" );
+
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/sample.jar?version-id=1.0" ).openConnection();
+        connection.setRequestMethod( "GET" );
+        connection.setRequestProperty( "Accept-Encoding", "pack200-gzip" );
+        connection.setRequestProperty( "If-Modified-Since", lastModified );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_NOT_MODIFIED, connection.getResponseCode() );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testSuffixRangeOnVersionedPack200Variant()
+            throws Exception
+    {
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/sample.jar?version-id=1.0" ).openConnection();
+        connection.setRequestMethod( "GET" );
+        connection.setRequestProperty( "Accept-Encoding", "pack200-gzip" );
+        connection.setRequestProperty( "Range", "bytes=-10" );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            assertEquals( "bytes 200-209/210", connection.getHeaderField( "Content-Range" ) );
+            assertSlice( connection, "sample__V1_0.jar.pack.gz", 200, 10 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testConcurrentPlatformVersionedDownloads()
+            throws Exception
+    {
+        ExecutorService pool = Executors.newFixedThreadPool( 8 );
+        try
+        {
+            List<Future<byte[]>> futures = new ArrayList<>();
+            for ( int i = 0; i < 8; i++ )
+            {
+                final int start = i * 25;
+                futures.add( pool.submit( () -> {
+                    HttpURLConnection connection = open(
+                            "http://localhost:" + port + "/lib/sample.jar?platform-version-id=1.0",
+                            "bytes=" + start + "-" + ( start + 24 ) );
+                    try
+                    {
+                        assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+                        assertEquals( "2.0", connection.getHeaderField( "x-java-jnlp-version-id" ) );
+                        assertEquals( "bytes " + start + "-" + ( start + 24 ) + "/200",
+                                      connection.getHeaderField( "Content-Range" ) );
+                        return readAll( connection.getInputStream() );
+                    }
+                    finally
+                    {
+                        connection.disconnect();
+                    }
+                } ) );
+            }
+
+            byte[] reassembled = new byte[200];
+            for ( int i = 0; i < 8; i++ )
+            {
+                byte[] part = futures.get( i ).get( 30, TimeUnit.SECONDS );
+                System.arraycopy( part, 0, reassembled, i * 25, 25 );
+            }
+            assertTrue( Arrays.equals( bytes( 200, 5 ), reassembled ) );
+        }
+        finally
+        {
+            pool.shutdownNow();
+        }
+    }
+
     public void testHeadRequestIgnoresRange()
             throws Exception
     {

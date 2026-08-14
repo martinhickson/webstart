@@ -250,7 +250,8 @@ public class JnlpResource
             {
                 for ( String param : value.substring( semi + 1 ).split( ";" ) )
                 {
-                    param = param.trim();
+                    // parameter names are case-insensitive (RFC 7230 3.2.6)
+                    param = param.trim().toLowerCase();
                     if ( param.startsWith( "q=" ) )
                     {
                         try

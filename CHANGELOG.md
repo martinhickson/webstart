@@ -44,6 +44,8 @@ where practical for `-bravura` maintenance releases.
 - Added hash-in-filename (`%23`), NUL-byte path rejection, version lookup on the URL-fallback server, platform no-match error, HEAD on a tiny file, and empty `Accept-Encoding` tests
 - Conditional validators now apply to the selected representation (RFC 7232 section 2.2): `If-Modified-Since` and `If-Range` are evaluated against the gzip/pack200 variant actually served when `Accept-Encoding` negotiates one, instead of the plain resource's `Last-Modified`
 - Added conditional-on-encoded-variant tests (gzip/pack200/versioned-gzip) with controlled fixture timestamps so the previously wrong behaviour would fail deterministically
+- `Accept-Encoding` parameter names are matched case-insensitively (RFC 7230 section 3.2.6): `gzip;Q=0` is now rejected
+- Added HEAD-with-encoding conditional, `Last-Modified`-on-gzip-partial, `;jsessionid` path rejection, versioned pack200 conditional and suffix, and concurrent `platform-version-id` download tests
 - Added locale-constrained versioned resources, case-sensitive and double-encoded path tests, `If-Range` on versioned resources, emoji filenames, versioned single-byte ranges, HEAD on versioned resources, and cross-directory concurrent versioned downloads
 - The `webstart-jnlp-servlet-it` binary fixtures are generated at test runtime instead of being committed; only the text `launch.jnlp` fixture is tracked
 - The streamed (non-NIO) range fallback for resources inside packaged JARs is now covered by integration tests via a second Undertow deployment

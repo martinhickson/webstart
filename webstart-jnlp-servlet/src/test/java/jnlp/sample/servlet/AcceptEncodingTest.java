@@ -102,4 +102,11 @@ public class AcceptEncodingTest
         assertTrue( JnlpResource.acceptsCoding( "gzip,", GZIP ) );
         assertFalse( JnlpResource.acceptsCoding( "br,", GZIP ) );
     }
+
+    public void testUpperCaseQParam()
+    {
+        // parameter names are case-insensitive (RFC 7230 3.2.6)
+        assertFalse( JnlpResource.acceptsCoding( "gzip;Q=0", GZIP ) );
+        assertTrue( JnlpResource.acceptsCoding( "gzip;Q=0.5", GZIP ) );
+    }
 }
