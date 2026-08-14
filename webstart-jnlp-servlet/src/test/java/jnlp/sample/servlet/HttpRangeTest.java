@@ -195,6 +195,22 @@ public class HttpRangeTest
         assertEquals( 99, range.getEnd() );
     }
 
+    public void testTrailingComma()
+    {
+        HttpRange range = HttpRange.parse( "bytes=0-9,", CONTENT_LENGTH );
+        assertNotNull( range );
+        assertEquals( 0, range.getStart() );
+        assertEquals( 9, range.getEnd() );
+    }
+
+    public void testExplicitThenSuffixMultiple()
+    {
+        HttpRange range = HttpRange.parse( "bytes=0-9,-20", CONTENT_LENGTH );
+        assertNotNull( range );
+        assertEquals( 0, range.getStart() );
+        assertEquals( 9, range.getEnd() );
+    }
+
     public void testSecondRangeMalformedIsIgnored()
     {
         HttpRange range = HttpRange.parse( "bytes=0-9,abc-def", CONTENT_LENGTH );

@@ -47,6 +47,7 @@ where practical for `-bravura` maintenance releases.
 - `Accept-Encoding` parameter names are matched case-insensitively (RFC 7230 section 3.2.6): `gzip;Q=0` is now rejected
 - Added HEAD-with-encoding conditional, `Last-Modified`-on-gzip-partial, `;jsessionid` path rejection, versioned pack200 conditional and suffix, and concurrent `platform-version-id` download tests
 - The successful jardiff path is now covered: real zip fixtures generate a minimal patch, which is served in full (`application/x-java-archive-diff`) with the `Range` header ignored; also added brotli/`br` negotiation, gzip-on-empty-resource, sequential versioned ranges, and concurrent `If-Range` matching tests
+- Added mixed range-spec forms (explicit+suffix, suffix+explicit, trailing comma), mixed-case unit with whitespace, conditionals on `version.xml`-mapped resources, q-zero encoding on versioned resources, case-sensitive nested paths, text-file query/suffix ranges, and a concurrent all-variants (gzip/pack200/versioned/plain/jardiff) test
 - Added locale-constrained versioned resources, case-sensitive and double-encoded path tests, `If-Range` on versioned resources, emoji filenames, versioned single-byte ranges, HEAD on versioned resources, and cross-directory concurrent versioned downloads
 - The `webstart-jnlp-servlet-it` binary fixtures are generated at test runtime instead of being committed; only the text `launch.jnlp` fixture is tracked
 - The streamed (non-NIO) range fallback for resources inside packaged JARs is now covered by integration tests via a second Undertow deployment
