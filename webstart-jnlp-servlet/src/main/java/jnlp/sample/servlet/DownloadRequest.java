@@ -95,6 +95,8 @@ public class DownloadRequest
 
     private long _ifRange = -1;
 
+    private String _ifRangeHeader = null;
+
     private HttpServletRequest _httpRequest = null;
 
     // HTTP Compression RFC 2616 : Standard headers
@@ -119,6 +121,7 @@ public class DownloadRequest
         _encoding = request.getHeader( ACCEPT_ENCODING );
         _range = request.getHeader( HEADER_RANGE );
         _ifRange = getDateHeader( request );
+        _ifRangeHeader = request.getHeader( HEADER_IF_RANGE );
         String context_path = request.getContextPath();
         if ( context_path != null )
         {
@@ -179,6 +182,7 @@ public class DownloadRequest
         _encoding = dreq._encoding;
         _range = dreq._range;
         _ifRange = dreq._ifRange;
+        _ifRangeHeader = dreq._ifRangeHeader;
         _context = dreq._context;
         _httpRequest = dreq._httpRequest;
         _path = dreq._path;
@@ -356,6 +360,14 @@ public class DownloadRequest
     public long getIfRange()
     {
         return _ifRange;
+    }
+
+    /**
+     * @return the raw {@code If-Range} header, or {@code null} if absent
+     */
+    public String getIfRangeHeader()
+    {
+        return _ifRangeHeader;
     }
 
     public String[] getOS()

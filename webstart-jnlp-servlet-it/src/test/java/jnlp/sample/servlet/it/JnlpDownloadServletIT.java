@@ -1969,7 +1969,7 @@ public class JnlpDownloadServletIT
         }
     }
 
-    public void testEtagFormIfRangeIsIgnored()
+    public void testEtagFormIfRangeStaleServesFull()
             throws Exception
     {
         HttpURLConnection connection = (HttpURLConnection) new URL(
@@ -1980,11 +1980,11 @@ public class JnlpDownloadServletIT
         connection.connect();
         try
         {
-            // the servlet only understands date-based If-Range; an
-            // entity-tag value is treated as absent (RFC 7233 section 3.2)
-            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
-            assertEquals( "bytes 0-9/1000", connection.getHeaderField( "Content-Range" ) );
-            assertContent( connection, 0, 10 );
+            // entity-tag If-Range is honoured: a non-matching tag means the
+            // range must be ignored and the full representation served
+            assertEquals( HttpURLConnection.HTTP_OK, connection.getResponseCode() );
+            assertNull( connection.getHeaderField( "Content-Range" ) );
+            assertContent( connection, 0, 1000 );
         }
         finally
         {
@@ -5499,6 +5499,223 @@ public class JnlpDownloadServletIT
         }
     }
 
+    public void testEtagPresentOnAllResponseTypes()
+            throws Exception
+    {
+        HttpURLConnection full = open( "http://localhost:" + port + "/sample.jar" );
+        String etag;
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_OK, full.getResponseCode() );
+            etag = full.getHeaderField( "ETag" );
+            assertNotNull( "Missing ETag on 200", etag );
+        }
+        finally
+        {
+            full.disconnect();
+        }
+
+        HttpURLConnection partial = open( "http://localhost:" + port + "/sample.jar", "bytes=10-19" );
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, partial.getResponseCode() );
+            assertEquals( etag, partial.getHeaderField( "ETag" ) );
+        }
+        finally
+        {
+            partial.disconnect();
+        }
+
+        HttpURLConnection head = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/sample.jar" ).openConnection();
+        head.setRequestMethod( "HEAD" );
+        head.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_OK, head.getResponseCode() );
+            assertEquals( etag, head.getHeaderField( "ETag" ) );
+        }
+        finally
+        {
+            head.disconnect();
+        }
+
+        HttpURLConnection unsatisfiable = open( "http://localhost:" + port + "/sample.jar", "bytes=5000-6000" );
+        try
+        {
+            assertEquals( 416, unsatisfiable.getResponseCode() );
+            assertEquals( etag, unsatisfiable.getHeaderField( "ETag" ) );
+        }
+        finally
+        {
+            unsatisfiable.disconnect();
+        }
+    }
+
+    public void testIfNoneMatchMatchingReturnsNotModified()
+            throws Exception
+    {
+        String etag = getEtag( "http://localhost:" + port + "/sample.jar" );
+
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/sample.jar" ).openConnection();
+        connection.setRequestMethod( "GET" );
+        connection.setRequestProperty( "If-None-Match", etag );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_NOT_MODIFIED, connection.getResponseCode() );
+            assertEquals( etag, connection.getHeaderField( "ETag" ) );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testIfNoneMatchNotMatchingReturnsContent()
+            throws Exception
+    {
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/sample.jar" ).openConnection();
+        connection.setRequestMethod( "GET" );
+        connection.setRequestProperty( "If-None-Match", "\"stale-etag\"" );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_OK, connection.getResponseCode() );
+            assertContent( connection, 0, 1000 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testIfNoneMatchWildcardReturnsNotModified()
+            throws Exception
+    {
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/sample.jar" ).openConnection();
+        connection.setRequestMethod( "GET" );
+        connection.setRequestProperty( "If-None-Match", "*" );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_NOT_MODIFIED, connection.getResponseCode() );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testIfNoneMatchTakesPrecedenceOverIfModifiedSince()
+            throws Exception
+    {
+        String etag = getEtag( "http://localhost:" + port + "/sample.jar" );
+
+        // If-Modified-Since is stale (would not 304), but a matching
+        // If-None-Match takes precedence and returns 304 (RFC 7232 3.3)
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/sample.jar" ).openConnection();
+        connection.setRequestMethod( "GET" );
+        connection.setRequestProperty( "If-None-Match", etag );
+        connection.setRequestProperty( "If-Modified-Since", "Wed, 01 Jan 2020 00:00:00 GMT" );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_NOT_MODIFIED, connection.getResponseCode() );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testIfMatchMatchingReturnsContent()
+            throws Exception
+    {
+        String etag = getEtag( "http://localhost:" + port + "/sample.jar" );
+
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/sample.jar" ).openConnection();
+        connection.setRequestMethod( "GET" );
+        connection.setRequestProperty( "If-Match", etag );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_OK, connection.getResponseCode() );
+            assertContent( connection, 0, 1000 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testIfMatchNotMatchingReturnsPreconditionFailed()
+            throws Exception
+    {
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/sample.jar" ).openConnection();
+        connection.setRequestMethod( "GET" );
+        connection.setRequestProperty( "If-Match", "\"stale-etag\"" );
+        connection.connect();
+        try
+        {
+            assertEquals( 412, connection.getResponseCode() );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testIfRangeEtagMatchingServesPartial()
+            throws Exception
+    {
+        String etag = getEtag( "http://localhost:" + port + "/sample.jar" );
+
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/sample.jar" ).openConnection();
+        connection.setRequestMethod( "GET" );
+        connection.setRequestProperty( "Range", "bytes=10-19" );
+        connection.setRequestProperty( "If-Range", etag );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            assertEquals( "bytes 10-19/1000", connection.getHeaderField( "Content-Range" ) );
+            assertContent( connection, 10, 10 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testIfRangeEtagStaleServesFull()
+            throws Exception
+    {
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/sample.jar" ).openConnection();
+        connection.setRequestMethod( "GET" );
+        connection.setRequestProperty( "Range", "bytes=10-19" );
+        connection.setRequestProperty( "If-Range", "\"stale-etag\"" );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_OK, connection.getResponseCode() );
+            assertNull( connection.getHeaderField( "Content-Range" ) );
+            assertContent( connection, 0, 1000 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
     public void testHeadRequestIgnoresRange()
             throws Exception
     {
@@ -5541,6 +5758,22 @@ public class JnlpDownloadServletIT
             String lastModified = connection.getHeaderField( "Last-Modified" );
             assertNotNull( "Missing Last-Modified header", lastModified );
             return lastModified;
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    private static String getEtag( String url )
+            throws Exception
+    {
+        HttpURLConnection connection = open( url );
+        try
+        {
+            String etag = connection.getHeaderField( "ETag" );
+            assertNotNull( "Missing ETag header", etag );
+            return etag;
         }
         finally
         {

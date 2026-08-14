@@ -67,6 +67,8 @@ abstract public class DownloadResponse
 
     private static final String HEADER_CONTENT_RANGE = "Content-Range";
 
+    private static final String HEADER_ETAG = "ETag";
+
     private static final String BYTES_RANGE_UNIT = "bytes";
 
     private static final String JNLP_ERROR_MIMETYPE = "application/x-java-jnlp-error";
@@ -104,6 +106,67 @@ abstract public class DownloadResponse
     }
 
     /**
+     * Computes a strong entity-tag for a representation from its length and
+     * last-modified time (RFC 7232 section 2.3).
+     *
+     * @param length       content length of the representation
+     * @param lastModified last-modified time of the representation
+     * @return a quoted opaque-tag
+     */
+    static String computeETag( long length, long lastModified )
+    {
+        return "\"" + Long.toHexString( length ) + "-" + Long.toHexString( lastModified ) + "\"";
+    }
+
+    /**
+     * Compares a single entity-tag against another, using weak comparison
+     * (ignoring the {@code W/} prefix) as required by RFC 7232 section 2.3.2.
+     */
+    private static boolean etagEquals( String candidate, String current )
+    {
+        String left = candidate.trim();
+        String right = current.trim();
+        if ( left.startsWith( "W/" ) )
+        {
+            left = left.substring( 2 ).trim();
+        }
+        if ( right.startsWith( "W/" ) )
+        {
+            right = right.substring( 2 ).trim();
+        }
+        return left.equals( right );
+    }
+
+    /**
+     * Evaluates an {@code If-None-Match}/{@code If-Match} or entity-tag
+     * {@code If-Range} header against the current entity-tag.
+     *
+     * @param header       the header value, or {@code null}
+     * @param currentEtag  the entity-tag of the current representation
+     * @return {@code true} when any listed tag (or {@code *}) matches
+     */
+    static boolean etagMatches( String header, String currentEtag )
+    {
+        if ( header == null )
+        {
+            return false;
+        }
+        String trimmed = header.trim();
+        if ( trimmed.equals( "*" ) )
+        {
+            return true;
+        }
+        for ( String tag : trimmed.split( "," ) )
+        {
+            if ( etagEquals( tag, currentEtag ) )
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Post information to an HttpResponse
      *
      * @param response TODO
@@ -136,9 +199,18 @@ abstract public class DownloadResponse
      * Factory method for file download responses
      */
 
-    static DownloadResponse getNotModifiedResponse()
+    static DownloadResponse getNotModifiedResponse( String etag )
     {
-        return new NotModifiedResponse();
+        return new NotModifiedResponse( etag );
+    }
+
+    /**
+     * Factory method for a 412 Precondition Failed response (RFC 7232
+     * section 4.2)
+     */
+    static DownloadResponse getPreconditionFailedResponse()
+    {
+        return new PreconditionFailedResponse();
     }
 
     static DownloadResponse getHeadRequestResponse( String mimeType, String versionId, long lastModified,
@@ -214,10 +286,31 @@ abstract public class DownloadResponse
     static private class NotModifiedResponse
             extends DownloadResponse
     {
+        private String _etag;
+
+        NotModifiedResponse( String etag )
+        {
+            _etag = etag;
+        }
+
         public void sendRespond( HttpServletResponse response )
                 throws IOException
         {
+            if ( _etag != null )
+            {
+                response.setHeader( HEADER_ETAG, _etag );
+            }
             response.sendError( HttpServletResponse.SC_NOT_MODIFIED );
+        }
+    }
+
+    static private class PreconditionFailedResponse
+            extends DownloadResponse
+    {
+        public void sendRespond( HttpServletResponse response )
+                throws IOException
+        {
+            response.sendError( HttpServletResponse.SC_PRECONDITION_FAILED );
         }
     }
 
@@ -270,6 +363,7 @@ abstract public class DownloadResponse
             response.setContentType( _mimeType );
             response.setHeader( HEADER_ACCEPT_RANGES, BYTES_RANGE_UNIT );
             response.setHeader( HEADER_CONTENT_RANGE, BYTES_RANGE_UNIT + " */" + _contentLength );
+            response.setHeader( HEADER_ETAG, computeETag( _contentLength, _lastModified ) );
             if ( _versionId != null )
             {
                 response.setHeader( HEADER_JNLP_VERSION, _versionId );
@@ -314,6 +408,7 @@ abstract public class DownloadResponse
             response.setContentType( _mimeType );
             response.setContentLengthLong( _contentLength );
             response.setHeader( HEADER_ACCEPT_RANGES, BYTES_RANGE_UNIT );
+            response.setHeader( HEADER_ETAG, computeETag( _contentLength, _lastModified ) );
             if ( _versionId != null )
             {
                 response.setHeader( HEADER_JNLP_VERSION, _versionId );
@@ -437,6 +532,7 @@ abstract public class DownloadResponse
             // Set header information
             response.setContentType( getMimeType() );
             response.setHeader( HEADER_ACCEPT_RANGES, BYTES_RANGE_UNIT );
+            response.setHeader( HEADER_ETAG, computeETag( length, getLastModified() ) );
             if ( getVersionId() != null )
             {
                 response.setHeader( HEADER_JNLP_VERSION, getVersionId() );

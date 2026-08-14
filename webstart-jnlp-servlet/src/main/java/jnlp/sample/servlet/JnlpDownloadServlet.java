@@ -201,41 +201,55 @@ public class JnlpDownloadServlet
             DownloadResponse dres;
 
             // Validators are evaluated against the selected representation, so
-            // when Accept-Encoding negotiates a gzip/pack200 variant its
-            // last-modified is the relevant one (RFC 7232 section 2.2)
-            long conditionalLastModified = jnlpres.getLastModified();
-            if ( ifModifiedSince != -1 && dreq.getEncoding() != null )
+            // when Accept-Encoding negotiates a gzip/pack200 variant that
+            // variant's validators apply (RFC 7232 section 2.2)
+            JnlpResource repRes = ( dreq.getEncoding() == null ) ? jnlpres : resolveEncoding( jnlpres, dreq );
+            File repFile = getRealFile( repRes );
+            long repLength = ( repFile != null ) ? repFile.length()
+                    : repRes.getResource().openConnection().getContentLengthLong();
+            String etag = DownloadResponse.computeETag( repLength, repRes.getLastModified() );
+
+            // If-Match: fail closed when the validator does not match
+            // (RFC 7232 section 3.1)
+            String ifMatch = request.getHeader( "If-Match" );
+            if ( ifMatch != null && !DownloadResponse.etagMatches( ifMatch, etag ) )
             {
-                conditionalLastModified = resolveEncoding( jnlpres, dreq ).getLastModified();
+                _log.addDebug( "If-Match does not match - 412" );
+                DownloadResponse.getPreconditionFailedResponse().sendRespond( response );
+                return;
             }
 
-            if ( ifModifiedSince != -1 && dreq.getRange() == null &&
-                    ( ifModifiedSince / 1000 ) >= ( conditionalLastModified / 1000 ) )
+            // If-None-Match takes precedence over If-Modified-Since
+            // (RFC 7232 section 3.2); applies to both GET and HEAD
+            String ifNoneMatch = request.getHeader( "If-None-Match" );
+            boolean notModified = false;
+            if ( ifNoneMatch != null && DownloadResponse.etagMatches( ifNoneMatch, etag ) )
+            {
+                notModified = true;
+            }
+            else if ( ifModifiedSince != -1 && dreq.getRange() == null &&
+                    ( ifModifiedSince / 1000 ) >= ( repRes.getLastModified() / 1000 ) )
             {
                 // We divide the value returned by getLastModified here by 1000
                 // because if protocol is HTTP, last 3 digits will always be 
                 // zero.  However, if protocol is JNDI, that's not the case.
                 // so we divide the value by 1000 to remove the last 3 digits
                 // before comparison
+                notModified = true;
+            }
 
-                // return 304 not modified if possible; applies to both GET and
-                // HEAD (RFC 9110 section 9.3.2)
+            if ( notModified )
+            {
                 _log.addDebug( "return 304 Not modified" );
-                dres = DownloadResponse.getNotModifiedResponse();
+                dres = DownloadResponse.getNotModifiedResponse( etag );
 
             }
             else if ( isHead )
             {
-                // Resolve the encoding-negotiated variant so HEAD mirrors what
-                // a GET would return (RFC 9110 section 9.3.2)
-                JnlpResource headRes = resolveEncoding( jnlpres, dreq );
-
-                long cl = headRes.getResource().openConnection().getContentLengthLong();
-
-                // head request response
-                dres = DownloadResponse.getHeadRequestResponse( headRes.getMimeType(), headRes.getReturnVersionId(),
-                                                                headRes.getLastModified(), cl,
-                                                                getContentEncoding( headRes.getPath() ) );
+                // HEAD mirrors what a GET would return (RFC 9110 section 9.3.2)
+                dres = DownloadResponse.getHeadRequestResponse( repRes.getMimeType(), repRes.getReturnVersionId(),
+                                                                repRes.getLastModified(), repLength,
+                                                                getContentEncoding( repRes.getPath() ) );
 
             }
             else
@@ -376,13 +390,35 @@ public class JnlpDownloadServlet
         boolean honorRange = rangeHeader != null && HttpRange.isByteRange( rangeHeader );
         if ( honorRange )
         {
-            // If-Range (RFC 7233 section 3.2): if the date does not match the
-            // current representation, ignore the Range header and send the full
-            // representation instead. The validator applies to the
-            // encoding-negotiated variant actually served (jr).
+            long contentLength =
+                    ( file != null ) ? file.length() : jr.getResource().openConnection().getContentLengthLong();
+
+            // If-Range (RFC 7233 section 3.2): if the validator does not match
+            // the current representation, ignore the Range header and send the
+            // full representation instead. The validator applies to the
+            // encoding-negotiated variant actually served (jr). Both the date
+            // and entity-tag forms are supported.
             long ifRange = dreq.getIfRange();
-            if ( ifRange != -1 && jr.getLastModified() != 0 &&
-                    ifRange / 1000 < jr.getLastModified() / 1000 )
+            String ifRangeHeader = dreq.getIfRangeHeader();
+            String currentEtag = DownloadResponse.computeETag( contentLength, jr.getLastModified() );
+            boolean ifRangeCurrent;
+            if ( ifRangeHeader != null && ifRange == -1 &&
+                    ( ifRangeHeader.trim().startsWith( "\"" ) || ifRangeHeader.trim().startsWith( "W/" ) ) )
+            {
+                // entity-tag form
+                ifRangeCurrent = DownloadResponse.etagMatches( ifRangeHeader, currentEtag );
+            }
+            else if ( ifRange == -1 || jr.getLastModified() == 0 )
+            {
+                // no usable If-Range (or a malformed date) - honour the range
+                ifRangeCurrent = true;
+            }
+            else
+            {
+                // date form
+                ifRangeCurrent = ifRange / 1000 >= jr.getLastModified() / 1000;
+            }
+            if ( !ifRangeCurrent )
             {
                 _log.addDebug( "If-Range does not match - sending full content" );
                 honorRange = false;

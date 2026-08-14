@@ -296,6 +296,12 @@ public class JarDiffHandler
         // a redeploy), regenerate the jardiff so a stale patch is never served.
         if ( entry == null || entry.isStale() )
         {
+            // release the stale patch file so it does not accumulate
+            if ( entry != null && entry.getJarDiffFile() != null )
+            {
+                entry.getJarDiffFile().delete();
+            }
+
             if ( _log.isInformationalLevel() )
             {
                 _log.addInformational( "servlet.log.info.jardiff.gen", res.getName(), dreq.getCurrentVersionId(),
