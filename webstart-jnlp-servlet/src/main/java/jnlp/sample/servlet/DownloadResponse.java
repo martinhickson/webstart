@@ -142,9 +142,9 @@ abstract public class DownloadResponse
     }
 
     static DownloadResponse getHeadRequestResponse( String mimeType, String versionId, long lastModified,
-                                                    long contentLength )
+                                                    long contentLength, String contentEncoding )
     {
-        return new HeadRequestResponse( mimeType, versionId, lastModified, contentLength );
+        return new HeadRequestResponse( mimeType, versionId, lastModified, contentLength, contentEncoding );
     }
 
     static DownloadResponse getFileDownloadResponse( byte[] content, String mimeType, long timestamp, String versionId )
@@ -292,12 +292,16 @@ abstract public class DownloadResponse
 
         private long _contentLength;
 
-        HeadRequestResponse( String mimeType, String versionId, long lastModified, long contentLength )
+        private String _contentEncoding;
+
+        HeadRequestResponse( String mimeType, String versionId, long lastModified, long contentLength,
+                             String contentEncoding )
         {
             _mimeType = mimeType;
             _versionId = versionId;
             _lastModified = lastModified;
             _contentLength = contentLength;
+            _contentEncoding = contentEncoding;
         }
 
         /**
@@ -309,6 +313,7 @@ abstract public class DownloadResponse
             // Set header information
             response.setContentType( _mimeType );
             response.setContentLengthLong( _contentLength );
+            response.setHeader( HEADER_ACCEPT_RANGES, BYTES_RANGE_UNIT );
             if ( _versionId != null )
             {
                 response.setHeader( HEADER_JNLP_VERSION, _versionId );
@@ -316,6 +321,10 @@ abstract public class DownloadResponse
             if ( _lastModified != 0 )
             {
                 response.setDateHeader( HEADER_LASTMOD, _lastModified );
+            }
+            if ( _contentEncoding != null )
+            {
+                response.setHeader( CONTENT_ENCODING, _contentEncoding );
             }
             response.setStatus( HttpServletResponse.SC_OK );
         }

@@ -27,6 +27,16 @@ where practical for `-bravura` maintenance releases.
 - Resource paths are URL-decoded before lookup (was: only the encoded `getRequestURI` was used), so files with spaces or encoded characters are now served
 - `If-Range` support (RFC 7233 section 3.2): a date-based `If-Range` that no longer matches the representation causes the `Range` header to be ignored and the full content to be served; malformed `If-Range` values are ignored
 - Extended integration tests to cover pack200-gzip variants, version-based lookups (`name__V<version>.jar`), mixed-unit ranges, `If-Range` match/mismatch/malformed, blocked direct access to versioned files, unicode-encoded paths, and empty-resource ranges
+- `HEAD` responses now advertise `Accept-Ranges: bytes` like full and partial responses
+- `HEAD` responses now mirror the `GET` response for the negotiated encoding (RFC 9110 section 9.3.2): the head branch resolves the gzip/pack200-gzip variant and sets `Content-Encoding` plus the variant's `Content-Length`, instead of always reporting the plain resource
+- URI paths are percent-decoded with `+` preserved as a literal character (RFC 3986 section 3.3); previously `URLDecoder` turned `+` into a space, so files with `+` in their name were not found
+- `JarDiffHandler.isJavawsVersion` and `JarDiffKey` are null-safe: a `current-version-id` request without a `User-Agent` header, or on a basic (non-versioned) resource, no longer throws and falls back to serving the file
+- The streamed (non-NIO) range fallback for resources inside packaged JARs is now covered by integration tests via a second Undertow deployment
+- Integration tests now cover path traversal rejection (raw and percent-encoded, with and without `Range`), entity-tag-form `If-Range`, case-insensitive `Accept-Encoding` values, future/old `If-Modified-Since`, os/arch-constrained versioned resources, `platform-version-id` error responses, blocked `version.xml`, trailing-slash paths, and `Range` headers lacking `=`
+- Integration tests now serve from a filesystem-backed web root, enabling multi-GiB (sparse) resource coverage: `Content-Length` above 2 GiB, NIO transfers at offsets beyond the int range, and stale-`If-Range` behaviour after a resource is replaced on disk
+- Added concurrent partial-download, repeated-`Range`-header, missing-resource, gzip/pack200 unsatisfiable and suffix ranges, zero-byte resource, `Accept-Ranges` on `416`, and full-download-after-partial tests
+- Added HEAD-on-gzip/pack200 parity tests, 1 MiB partial transfers on the multi-GiB resource, future-dated `If-Range`, gzip encoding on files without a `.gz` variant, pack200-gzip on JNLP files, and multi-GiB suffix/open-ended/end-clamped range tests
+- Added URL-fallback range tests, paths containing literal/encoded `+`, versioned gzip variants, pack200-over-gzip encoding preference, jardiff fallback with and without `User-Agent`, zero-suffix rejection, pack200 unsatisfiable ranges, and full ranges on versioned resources
 
 ## [1.2.4-bravura] - 2026-07-18
 

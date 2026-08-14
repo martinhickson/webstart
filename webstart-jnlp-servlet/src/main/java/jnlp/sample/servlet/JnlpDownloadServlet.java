@@ -192,12 +192,16 @@ public class JnlpDownloadServlet
 
             if ( isHead )
             {
+                // Resolve the encoding-negotiated variant so HEAD mirrors what
+                // a GET would return (RFC 9110 section 9.3.2)
+                JnlpResource headRes = resolveEncoding( jnlpres, dreq );
 
-                long cl = jnlpres.getResource().openConnection().getContentLengthLong();
+                long cl = headRes.getResource().openConnection().getContentLengthLong();
 
                 // head request response
-                dres = DownloadResponse.getHeadRequestResponse( jnlpres.getMimeType(), jnlpres.getVersionId(),
-                                                                jnlpres.getLastModified(), cl );
+                dres = DownloadResponse.getHeadRequestResponse( headRes.getMimeType(), headRes.getReturnVersionId(),
+                                                                headRes.getLastModified(), cl,
+                                                                getContentEncoding( headRes.getPath() ) );
 
             }
             else if ( dreq.getRange() == null && ifModifiedSince != -1 &&
@@ -337,10 +341,7 @@ public class JnlpDownloadServlet
         }
 
         // check and see if we can use pack resource
-        JnlpResource jr =
-                new JnlpResource( getServletContext(), jnlpres.getName(), jnlpres.getVersionId(), jnlpres.getOSList(),
-                                  jnlpres.getArchList(), jnlpres.getLocaleList(), jnlpres.getPath(),
-                                  jnlpres.getReturnVersionId(), dreq.getEncoding() );
+        JnlpResource jr = resolveEncoding( jnlpres, dreq );
 
         _log.addDebug( "Real resource returned: " + jr );
 
@@ -394,6 +395,41 @@ public class JnlpDownloadServlet
         }
         return DownloadResponse.getFileDownloadResponse( jr.getResource(), jr.getMimeType(), jr.getLastModified(),
                                                          jr.getReturnVersionId() );
+    }
+
+    /**
+     * Re-resolves a resource honouring the request's {@code Accept-Encoding}
+     * (e.g. serving the gzip or pack200-gzip variant when available).
+     *
+     * @param jnlpres the located resource
+     * @param dreq    the download request
+     * @return the encoding-negotiated resource
+     */
+    private JnlpResource resolveEncoding( JnlpResource jnlpres, DownloadRequest dreq )
+    {
+        return new JnlpResource( getServletContext(), jnlpres.getName(), jnlpres.getVersionId(), jnlpres.getOSList(),
+                                 jnlpres.getArchList(), jnlpres.getLocaleList(), jnlpres.getPath(),
+                                 jnlpres.getReturnVersionId(), dreq.getEncoding() );
+    }
+
+    /**
+     * Returns the {@code Content-Encoding} value implied by a resource path,
+     * or {@code null} for an unencoded resource.
+     *
+     * @param path resource path
+     * @return the content-encoding, or {@code null}
+     */
+    private String getContentEncoding( String path )
+    {
+        if ( path.endsWith( ".pack.gz" ) )
+        {
+            return DownloadResponse.PACK200_GZIP_ENCODING;
+        }
+        if ( path.endsWith( ".gz" ) )
+        {
+            return DownloadResponse.GZIP_ENCODING;
+        }
+        return null;
     }
 
     /**

@@ -134,14 +134,7 @@ public class DownloadRequest
         }
         // getRequestURI returns the undecoded path; decode it before using it
         // to look up resources, so names with spaces or encoded characters work
-        try
-        {
-            _path = URLDecoder.decode( _path, StandardCharsets.UTF_8 );
-        }
-        catch ( IllegalArgumentException iae )
-        {
-            // invalid percent-encoding - keep the raw path
-        }
+        _path = decodePath( _path );
         _path = _path.trim();
         if ( _context != null && !_path.endsWith( "/" ) )
         {
@@ -205,6 +198,33 @@ public class DownloadRequest
     {
         String res = req.getParameter( key );
         return ( res == null ) ? null : res.trim();
+    }
+
+    /**
+     * Percent-decodes a URI path. Unlike {@link URLDecoder}, a {@code +} in a
+     * path is a literal character (RFC 3986 section 3.3) and is never turned
+     * into a space.
+     *
+     * @param path the encoded request path
+     * @return the decoded path, or the raw path if decoding fails
+     */
+    private static String decodePath( String path )
+    {
+        if ( path.indexOf( '%' ) == -1 )
+        {
+            return path;
+        }
+        try
+        {
+            // Protect literal '+' characters from URLDecoder's query-string
+            // semantics by re-encoding them before decoding.
+            return URLDecoder.decode( path.replace( "+", "%2B" ), StandardCharsets.UTF_8 );
+        }
+        catch ( IllegalArgumentException iae )
+        {
+            // invalid percent-encoding - keep the raw path
+            return path;
+        }
     }
 
     /**

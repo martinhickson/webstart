@@ -179,6 +179,112 @@ public class HttpRangeTest
         assertNull( HttpRange.parse( "bytes=-1", -1 ) );
     }
 
+    public void testMultipleRangesWithoutSpacesUsesFirst()
+    {
+        HttpRange range = HttpRange.parse( "bytes=0-9,10-19", CONTENT_LENGTH );
+        assertNotNull( range );
+        assertEquals( 0, range.getStart() );
+        assertEquals( 9, range.getEnd() );
+    }
+
+    public void testSuffixFirstInMultipleRanges()
+    {
+        HttpRange range = HttpRange.parse( "bytes=-5,0-9", CONTENT_LENGTH );
+        assertNotNull( range );
+        assertEquals( 95, range.getStart() );
+        assertEquals( 99, range.getEnd() );
+    }
+
+    public void testSecondRangeMalformedIsIgnored()
+    {
+        HttpRange range = HttpRange.parse( "bytes=0-9,abc-def", CONTENT_LENGTH );
+        assertNotNull( range );
+        assertEquals( 0, range.getStart() );
+        assertEquals( 9, range.getEnd() );
+    }
+
+    public void testRangeHeaderWithoutUnit()
+    {
+        assertNull( HttpRange.parse( "0-9", CONTENT_LENGTH ) );
+    }
+
+    public void testNonBytesUnitStillReturnsNullFromParse()
+    {
+        assertNull( HttpRange.parse( "bytes2=0-9", CONTENT_LENGTH ) );
+        assertNull( HttpRange.parse( "bytesx=0-9", CONTENT_LENGTH ) );
+    }
+
+    public void testGiantEndOnHugeContent()
+    {
+        long huge = Long.MAX_VALUE;
+        HttpRange range = HttpRange.parse( "bytes=5-999999999999999999999", huge );
+        assertNotNull( range );
+        assertEquals( 5, range.getStart() );
+        assertEquals( Long.MAX_VALUE - 1, range.getEnd() );
+    }
+
+    public void testGiantSuffixOnHugeContent()
+    {
+        long huge = Long.MAX_VALUE;
+        HttpRange range = HttpRange.parse( "bytes=-5", huge );
+        assertNotNull( range );
+        assertEquals( Long.MAX_VALUE - 5, range.getStart() );
+        assertEquals( Long.MAX_VALUE - 1, range.getEnd() );
+    }
+
+    public void testSingleByteRangeMidContent()
+    {
+        HttpRange range = HttpRange.parse( "bytes=5-5", 6 );
+        assertNotNull( range );
+        assertEquals( 5, range.getStart() );
+        assertEquals( 5, range.getEnd() );
+    }
+
+    public void testEndEqualToContentLengthMinusOne()
+    {
+        HttpRange range = HttpRange.parse( "bytes=0-99", CONTENT_LENGTH );
+        assertNotNull( range );
+        assertEquals( 0, range.getStart() );
+        assertEquals( 99, range.getEnd() );
+    }
+
+    public void testStartOnlyRangeOnSingleByteContent()
+    {
+        HttpRange range = HttpRange.parse( "bytes=0-", 1 );
+        assertNotNull( range );
+        assertEquals( 0, range.getStart() );
+        assertEquals( 0, range.getEnd() );
+    }
+
+    public void testTabInHeaderIsRejected()
+    {
+        assertNull( HttpRange.parse( "bytes=0-9\t10-19", CONTENT_LENGTH ) );
+        assertNull( HttpRange.parse( "bytes\t=0-9", CONTENT_LENGTH ) );
+    }
+
+    public void testZeroSuffixIsAlwaysUnsatisfiable()
+    {
+        assertNull( HttpRange.parse( "bytes=-0", CONTENT_LENGTH ) );
+        assertNull( HttpRange.parse( "bytes=-0", 1 ) );
+    }
+
+    public void testMixedCaseUnit()
+    {
+        HttpRange range = HttpRange.parse( "ByTeS=0-9", CONTENT_LENGTH );
+        assertNotNull( range );
+        assertEquals( 0, range.getStart() );
+        assertEquals( 9, range.getEnd() );
+        assertTrue( HttpRange.isByteRange( "bYtEs=0-9" ) );
+    }
+
+    public void testSpaceBetweenUnitAndEquals()
+    {
+        // the unit still parses as "bytes" but the spec is malformed, so it
+        // is recognised as a byte range request and then rejected
+        assertTrue( HttpRange.isByteRange( "bytes = 0-9" ) );
+        assertNull( HttpRange.parse( "bytes = 0-9", CONTENT_LENGTH ) );
+    }
+
     public void testExplicitStartAndEnd()
     {
         HttpRange range = HttpRange.parse( "bytes=10-19", CONTENT_LENGTH );

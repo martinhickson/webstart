@@ -131,13 +131,13 @@ public class JarDiffHandler
             }
             JarDiffKey other = (JarDiffKey) o;
 
-            int n = _name.compareTo( other.getName() );
+            int n = compareNullSafe( _name, other.getName() );
             if ( n != 0 )
             {
                 return n;
             }
 
-            n = _fromVersionId.compareTo( other.getFromVersionId() );
+            n = compareNullSafe( _fromVersionId, other.getFromVersionId() );
             if ( n != 0 )
             {
                 return n;
@@ -148,7 +148,7 @@ public class JarDiffHandler
                 return -1;
             }
 
-            return _toVersionId.compareTo( other.getToVersionId() );
+            return compareNullSafe( _toVersionId, other.getToVersionId() );
         }
 
         public boolean equals( Object o )
@@ -158,7 +158,29 @@ public class JarDiffHandler
 
         public int hashCode()
         {
-            return _name.hashCode() + _fromVersionId.hashCode() + _toVersionId.hashCode();
+            int result = 17;
+            result = 31 * result + ( _name == null ? 0 : _name.hashCode() );
+            result = 31 * result + ( _fromVersionId == null ? 0 : _fromVersionId.hashCode() );
+            result = 31 * result + ( _toVersionId == null ? 0 : _toVersionId.hashCode() );
+            result = 31 * result + ( _minimal ? 1 : 0 );
+            return result;
+        }
+
+        private static int compareNullSafe( String a, String b )
+        {
+            if ( a == null && b == null )
+            {
+                return 0;
+            }
+            if ( a == null )
+            {
+                return -1;
+            }
+            if ( b == null )
+            {
+                return 1;
+            }
+            return a.compareTo( b );
         }
     }
 
@@ -258,6 +280,12 @@ public class JarDiffHandler
     {
         String javawsAgent = "javaws";
         String jwsVer = dreq.getHttpRequest().getHeader( "User-Agent" );
+
+        // a request without a User-Agent header is not from javaws
+        if ( jwsVer == null )
+        {
+            return false;
+        }
 
         // check the request is coming from javaws
         if ( !jwsVer.startsWith( "javaws-" ) )
