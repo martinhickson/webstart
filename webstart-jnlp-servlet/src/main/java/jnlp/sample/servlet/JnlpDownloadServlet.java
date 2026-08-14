@@ -171,7 +171,17 @@ public class JnlpDownloadServlet
             _log.addDebug( dreq.toString() );
         }
 
-        long ifModifiedSince = request.getDateHeader( "If-Modified-Since" );
+        // A malformed If-Modified-Since must be ignored, not fail the request
+        // (RFC 7232 section 3.3)
+        long ifModifiedSince = -1;
+        try
+        {
+            ifModifiedSince = request.getDateHeader( "If-Modified-Since" );
+        }
+        catch ( IllegalArgumentException iae )
+        {
+            // header present but not a valid date - ignore it
+        }
 
         // Check if it is a valid request
         try
