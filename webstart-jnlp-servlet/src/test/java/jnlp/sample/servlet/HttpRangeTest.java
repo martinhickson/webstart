@@ -211,6 +211,59 @@ public class HttpRangeTest
         assertEquals( 9, range.getEnd() );
     }
 
+    public void testParseAllTwoExplicitRanges()
+    {
+        java.util.List<HttpRange> ranges = HttpRange.parseAll( "bytes=0-9,20-29", CONTENT_LENGTH );
+        assertNotNull( ranges );
+        assertEquals( 2, ranges.size() );
+        assertEquals( 0, ranges.get( 0 ).getStart() );
+        assertEquals( 9, ranges.get( 0 ).getEnd() );
+        assertEquals( 20, ranges.get( 1 ).getStart() );
+        assertEquals( 29, ranges.get( 1 ).getEnd() );
+    }
+
+    public void testParseAllSuffixAndExplicit()
+    {
+        java.util.List<HttpRange> ranges = HttpRange.parseAll( "bytes=-20,0-9", CONTENT_LENGTH );
+        assertNotNull( ranges );
+        assertEquals( 2, ranges.size() );
+        assertEquals( 80, ranges.get( 0 ).getStart() );
+        assertEquals( 99, ranges.get( 0 ).getEnd() );
+        assertEquals( 0, ranges.get( 1 ).getStart() );
+    }
+
+    public void testParseAllSingleRange()
+    {
+        java.util.List<HttpRange> ranges = HttpRange.parseAll( "bytes=10-19", CONTENT_LENGTH );
+        assertNotNull( ranges );
+        assertEquals( 1, ranges.size() );
+        assertEquals( 10, ranges.get( 0 ).getStart() );
+    }
+
+    public void testParseAllUnsatisfiableReturnsNull()
+    {
+        assertNull( HttpRange.parseAll( "bytes=0-9,5000-6000", CONTENT_LENGTH ) );
+        assertNull( HttpRange.parseAll( "bytes=1000-", CONTENT_LENGTH ) );
+    }
+
+    public void testParseAllMixedUnitReturnsNull()
+    {
+        assertNull( HttpRange.parseAll( "bytes=0-9, items=0-9", CONTENT_LENGTH ) );
+    }
+
+    public void testParseAllTrailingComma()
+    {
+        java.util.List<HttpRange> ranges = HttpRange.parseAll( "bytes=0-9,", CONTENT_LENGTH );
+        assertNotNull( ranges );
+        assertEquals( 1, ranges.size() );
+        assertEquals( 0, ranges.get( 0 ).getStart() );
+    }
+
+    public void testParseAllSpaceAroundEqualsReturnsNull()
+    {
+        assertNull( HttpRange.parseAll( "bytes = 0-9", CONTENT_LENGTH ) );
+    }
+
     public void testSecondRangeMalformedIsIgnored()
     {
         HttpRange range = HttpRange.parse( "bytes=0-9,abc-def", CONTENT_LENGTH );

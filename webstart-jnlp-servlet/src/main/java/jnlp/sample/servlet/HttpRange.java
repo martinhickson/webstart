@@ -1,5 +1,7 @@
 package jnlp.sample.servlet;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -14,6 +16,8 @@ import java.util.regex.Pattern;
 public final class HttpRange
 {
     private static final Pattern RANGE_SPEC = Pattern.compile( "^bytes=(\\d*)-(\\d*)$", Pattern.CASE_INSENSITIVE );
+
+    private static final Pattern SPEC = Pattern.compile( "^(\\d*)-(\\d*)$" );
 
     private final long _start;
 
@@ -74,9 +78,57 @@ public final class HttpRange
         {
             return null;
         }
-        String startSpec = matcher.group( 1 );
-        String endSpec = matcher.group( 2 );
+        return parseRangeSpec( matcher.group( 1 ), matcher.group( 2 ), contentLength );
+    }
 
+    /**
+     * Parses a {@code Range} header into every satisfiable byte range.
+     *
+     * @param header        the raw {@code Range} header value, or {@code null}
+     * @param contentLength total length of the selected representation, or
+     *                      {@code -1}/{@code 0} if unknown
+     * @return the ordered list of satisfiable ranges, or {@code null} when the
+     *         header is absent, malformed, uses a non-bytes unit, or contains
+     *         an unsatisfiable range (RFC 7233 section 4.1)
+     */
+    public static List<HttpRange> parseAll( String header, long contentLength )
+    {
+        if ( header == null || contentLength <= 0 )
+        {
+            return null;
+        }
+        String spec = header.trim();
+        // the range-set must start with the "bytes" unit and '=' (RFC 7233
+        // section 2.1 allows no whitespace around the unit separator)
+        if ( !spec.regionMatches( true, 0, "bytes=", 0, 6 ) )
+        {
+            return null;
+        }
+        List<HttpRange> result = new ArrayList<>();
+        for ( String token : spec.substring( 6 ).split( "," ) )
+        {
+            String value = token.trim();
+            if ( value.isEmpty() )
+            {
+                continue;
+            }
+            Matcher matcher = SPEC.matcher( value );
+            if ( !matcher.matches() )
+            {
+                return null;
+            }
+            HttpRange range = parseRangeSpec( matcher.group( 1 ), matcher.group( 2 ), contentLength );
+            if ( range == null )
+            {
+                return null;
+            }
+            result.add( range );
+        }
+        return result.isEmpty() ? null : result;
+    }
+
+    private static HttpRange parseRangeSpec( String startSpec, String endSpec, long contentLength )
+    {
         if ( startSpec.isEmpty() )
         {
             // Suffix form: "bytes=-N" requests the last N bytes

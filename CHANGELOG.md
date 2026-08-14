@@ -52,6 +52,9 @@ where practical for `-bravura` maintenance releases.
 - Cached jardiffs are now invalidated when either source jar changes (e.g. after a redeploy): `JarDiffEntry` records the source files' identity and a stale entry is regenerated instead of serving an outdated patch; the stale patch file is deleted
 - Added strong `ETag` support (RFC 7232): `ETag` is emitted on 200/206/304/416/HEAD responses, `If-None-Match` (including `*`, weak comparison, lists) returns `304` and takes precedence over `If-Modified-Since`, `If-Match` mismatch returns `412`, and the entity-tag form of `If-Range` is honoured (match → `206`, stale → full content)
 - Added ETag unit tests and integration tests for ETag headers, `If-None-Match`, `If-Match`, and entity-tag `If-Range`
+- Multiple satisfiable byte ranges now return a `multipart/byteranges` 206 (RFC 7233 section 4.1) via `HttpRange.parseAll`; a request with any unsatisfiable or mixed-unit range returns `416`. Each part is streamed from the file via `FileChannel`
+- File responses advertise `Vary: Accept-Encoding` (RFC 7231 section 7.1.4) since the representation depends on the `Accept-Encoding` negotiation
+- Added `parseAll` unit tests plus integration tests for multipart responses (plain, versioned, gzip variant), multipart rejection on unsatisfiable ranges, and `Vary`
 - Added jardiff cache-invalidation, `If-None-Match`-ignored, query-parameter-order, concurrent jardiff, and HEAD-on-jardiff-source tests
 - Added locale-constrained versioned resources, case-sensitive and double-encoded path tests, `If-Range` on versioned resources, emoji filenames, versioned single-byte ranges, HEAD on versioned resources, and cross-directory concurrent versioned downloads
 - The `webstart-jnlp-servlet-it` binary fixtures are generated at test runtime instead of being committed; only the text `launch.jnlp` fixture is tracked

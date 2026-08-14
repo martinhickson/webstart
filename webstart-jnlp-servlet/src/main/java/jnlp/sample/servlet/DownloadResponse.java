@@ -51,6 +51,7 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.WritableByteChannel;
 import java.nio.file.StandardOpenOption;
 import java.util.Date;
+import java.util.List;
 import java.util.MissingResourceException;
 
 /**
@@ -68,6 +69,8 @@ abstract public class DownloadResponse
     private static final String HEADER_CONTENT_RANGE = "Content-Range";
 
     private static final String HEADER_ETAG = "ETag";
+
+    private static final String HEADER_VARY = "Vary";
 
     private static final String BYTES_RANGE_UNIT = "bytes";
 
@@ -279,6 +282,39 @@ abstract public class DownloadResponse
         return new UnsatisfiableRangeResponse( mimeType, versionId, timestamp, contentLength );
     }
 
+    /**
+     * Factory method for a multi-range {@code multipart/byteranges} response
+     * (HTTP 206, RFC 7233 section 4.1). Disk-backed content is streamed with
+     * a {@link FileChannel}.
+     *
+     * @param file      file to serve
+     * @param mimeType  mime-type of the resource
+     * @param timestamp last modified timestamp of the resource
+     * @param versionId JNLP version-id of the resource
+     * @param ranges    the satisfiable ranges (in request order)
+     */
+    static DownloadResponse getMultipartFileDownloadResponse( File file, String mimeType, long timestamp,
+                                                              String versionId, List<HttpRange> ranges )
+    {
+        return new MultipartFileDownloadResponse( file, null, mimeType, versionId, timestamp, ranges );
+    }
+
+    /**
+     * Factory method for a multi-range {@code multipart/byteranges} response
+     * (HTTP 206, RFC 7233 section 4.1) backed by a URL stream.
+     *
+     * @param resource  URL of the resource
+     * @param mimeType  mime-type of the resource
+     * @param timestamp last modified timestamp of the resource
+     * @param versionId JNLP version-id of the resource
+     * @param ranges    the satisfiable ranges (in request order)
+     */
+    static DownloadResponse getMultipartFileDownloadResponse( URL resource, String mimeType, long timestamp,
+                                                              String versionId, List<HttpRange> ranges )
+    {
+        return new MultipartFileDownloadResponse( null, resource, mimeType, versionId, timestamp, ranges );
+    }
+
     //
     // Private classes implementing the various types
     //
@@ -364,6 +400,7 @@ abstract public class DownloadResponse
             response.setHeader( HEADER_ACCEPT_RANGES, BYTES_RANGE_UNIT );
             response.setHeader( HEADER_CONTENT_RANGE, BYTES_RANGE_UNIT + " */" + _contentLength );
             response.setHeader( HEADER_ETAG, computeETag( _contentLength, _lastModified ) );
+            response.setHeader( HEADER_VARY, "Accept-Encoding" );
             if ( _versionId != null )
             {
                 response.setHeader( HEADER_JNLP_VERSION, _versionId );
@@ -409,6 +446,7 @@ abstract public class DownloadResponse
             response.setContentLengthLong( _contentLength );
             response.setHeader( HEADER_ACCEPT_RANGES, BYTES_RANGE_UNIT );
             response.setHeader( HEADER_ETAG, computeETag( _contentLength, _lastModified ) );
+            response.setHeader( HEADER_VARY, "Accept-Encoding" );
             if ( _versionId != null )
             {
                 response.setHeader( HEADER_JNLP_VERSION, _versionId );
@@ -533,6 +571,7 @@ abstract public class DownloadResponse
             response.setContentType( getMimeType() );
             response.setHeader( HEADER_ACCEPT_RANGES, BYTES_RANGE_UNIT );
             response.setHeader( HEADER_ETAG, computeETag( length, getLastModified() ) );
+            response.setHeader( HEADER_VARY, "Accept-Encoding" );
             if ( getVersionId() != null )
             {
                 response.setHeader( HEADER_JNLP_VERSION, getVersionId() );
@@ -752,6 +791,145 @@ abstract public class DownloadResponse
         public String toString()
         {
             return super.toString() + "[ " + getArgString() + "]";
+        }
+    }
+
+    static private class MultipartFileDownloadResponse
+            extends DownloadResponse
+    {
+        private File _file;
+
+        private URL _resource;
+
+        private String _mimeType;
+
+        private String _versionId;
+
+        private long _lastModified;
+
+        private List<HttpRange> _ranges;
+
+        MultipartFileDownloadResponse( File file, URL resource, String mimeType, String versionId, long lastModified,
+                                       List<HttpRange> ranges )
+        {
+            _file = file;
+            _resource = resource;
+            _mimeType = mimeType;
+            _versionId = versionId;
+            _lastModified = lastModified;
+            _ranges = ranges;
+        }
+
+        private long getTotalLength()
+                throws IOException
+        {
+            if ( _file != null )
+            {
+                return _file.length();
+            }
+            return _resource.openConnection().getContentLengthLong();
+        }
+
+        /**
+         * Writes a single range's bytes to the given output.
+         */
+        private void writeRange( HttpRange range, OutputStream out )
+                throws IOException
+        {
+            if ( _file != null )
+            {
+                WritableByteChannel target = Channels.newChannel( out );
+                try ( FileChannel channel = FileChannel.open( _file.toPath(), StandardOpenOption.READ ) )
+                {
+                    long position = range.getStart();
+                    long remaining = range.getLength();
+                    while ( remaining > 0 )
+                    {
+                        long written = channel.transferTo( position, remaining, target );
+                        if ( written <= 0 )
+                        {
+                            break;
+                        }
+                        position += written;
+                        remaining -= written;
+                    }
+                }
+                return;
+            }
+            try ( InputStream in = _resource.openConnection().getInputStream() )
+            {
+                long skip = range.getStart();
+                while ( skip > 0 )
+                {
+                    long skipped = in.skip( skip );
+                    if ( skipped <= 0 )
+                    {
+                        break;
+                    }
+                    skip -= skipped;
+                }
+                byte[] bytes = new byte[32 * 1024];
+                long remaining = range.getLength();
+                int read;
+                while ( remaining > 0 && ( read = in.read( bytes, 0, (int) Math.min( remaining, bytes.length ) ) ) != -1 )
+                {
+                    out.write( bytes, 0, read );
+                    remaining -= read;
+                }
+            }
+        }
+
+        /**
+         * Post information to an HttpResponse
+         */
+        public void sendRespond( HttpServletResponse response )
+                throws IOException
+        {
+            long totalLength = getTotalLength();
+            String boundary = "jnlp-" + Long.toHexString( System.nanoTime() ) + "-" + Long.toHexString(
+                    new java.util.Random().nextLong() );
+
+            response.setStatus( HttpServletResponse.SC_PARTIAL_CONTENT );
+            response.setContentType( "multipart/byteranges; boundary=" + boundary );
+            response.setHeader( HEADER_ACCEPT_RANGES, BYTES_RANGE_UNIT );
+            response.setHeader( HEADER_ETAG, computeETag( totalLength, _lastModified ) );
+            response.setHeader( HEADER_VARY, "Accept-Encoding" );
+            if ( _versionId != null )
+            {
+                response.setHeader( HEADER_JNLP_VERSION, _versionId );
+            }
+            if ( _lastModified != 0 )
+            {
+                response.setDateHeader( HEADER_LASTMOD, _lastModified );
+            }
+
+            // compute the total response length up front
+            long bodyLength = 0;
+            for ( HttpRange range : _ranges )
+            {
+                bodyLength += 2 + boundary.length() + 2; // "--boundary\r\n"
+                bodyLength += partHeader( range, totalLength ).length();
+                bodyLength += range.getLength();
+                bodyLength += 2; // "\r\n"
+            }
+            bodyLength += 2 + boundary.length() + 4; // "--boundary--\r\n"
+            response.setContentLengthLong( bodyLength );
+
+            OutputStream out = response.getOutputStream();
+            for ( HttpRange range : _ranges )
+            {
+                out.write( ( "--" + boundary + "\r\n" ).getBytes( "UTF-8" ) );
+                out.write( partHeader( range, totalLength ).getBytes( "UTF-8" ) );
+                writeRange( range, out );
+                out.write( ( "\r\n" ).getBytes( "UTF-8" ) );
+            }
+            out.write( ( "--" + boundary + "--\r\n" ).getBytes( "UTF-8" ) );
+        }
+
+        private String partHeader( HttpRange range, long totalLength )
+        {
+            return "Content-Type: " + _mimeType + "\r\n" + "Content-Range: " + BYTES_RANGE_UNIT + " " +
+                    range.getStart() + "-" + range.getEnd() + "/" + totalLength + "\r\n\r\n";
         }
     }
 }

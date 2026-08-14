@@ -514,20 +514,13 @@ public class JnlpDownloadServletIT
         }
     }
 
-    public void testMultipleRangesHonoursFirst()
+    public void testMultipleRangesReturnsMultipart()
             throws Exception
     {
-        HttpURLConnection connection = open( "http://localhost:" + port + "/sample.jar", "bytes=0-9,20-29" );
-        try
-        {
-            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
-            assertEquals( "bytes 0-9/1000", connection.getHeaderField( "Content-Range" ) );
-            assertContent( connection, 0, 10 );
-        }
-        finally
-        {
-            connection.disconnect();
-        }
+        List<byte[]> parts = fetchMultipart( "http://localhost:" + port + "/sample.jar", "bytes=0-9,20-29" );
+        assertEquals( 2, parts.size() );
+        assertContentSlice( parts.get( 0 ), 0, 10 );
+        assertContentSlice( parts.get( 1 ), 20, 10 );
     }
 
     public void testUnknownRangeUnitIsIgnored()
@@ -978,15 +971,15 @@ public class JnlpDownloadServletIT
         }
     }
 
-    public void testMixedUnitMultipleRangesUsesBytesFirst()
+    public void testMixedUnitMultipleRangesRejected()
             throws Exception
     {
         HttpURLConnection connection = open( "http://localhost:" + port + "/sample.jar", "bytes=0-9, items=0-9" );
         try
         {
-            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
-            assertEquals( "bytes 0-9/1000", connection.getHeaderField( "Content-Range" ) );
-            assertContent( connection, 0, 10 );
+            // a range-set uses a single unit; a non-bytes entry makes it invalid
+            assertEquals( 416, connection.getResponseCode() );
+            assertEquals( "bytes */1000", connection.getHeaderField( "Content-Range" ) );
         }
         finally
         {
@@ -4803,33 +4796,19 @@ public class JnlpDownloadServletIT
     public void testMixedRangeExplicitThenSuffix()
             throws Exception
     {
-        HttpURLConnection connection = open( "http://localhost:" + port + "/sample.jar", "bytes=0-9,-20" );
-        try
-        {
-            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
-            assertEquals( "bytes 0-9/1000", connection.getHeaderField( "Content-Range" ) );
-            assertContent( connection, 0, 10 );
-        }
-        finally
-        {
-            connection.disconnect();
-        }
+        List<byte[]> parts = fetchMultipart( "http://localhost:" + port + "/sample.jar", "bytes=0-9,-20" );
+        assertEquals( 2, parts.size() );
+        assertContentSlice( parts.get( 0 ), 0, 10 );
+        assertContentSlice( parts.get( 1 ), 980, 20 );
     }
 
     public void testMixedRangeSuffixThenExplicit()
             throws Exception
     {
-        HttpURLConnection connection = open( "http://localhost:" + port + "/sample.jar", "bytes=-20,0-9" );
-        try
-        {
-            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
-            assertEquals( "bytes 980-999/1000", connection.getHeaderField( "Content-Range" ) );
-            assertContent( connection, 980, 20 );
-        }
-        finally
-        {
-            connection.disconnect();
-        }
+        List<byte[]> parts = fetchMultipart( "http://localhost:" + port + "/sample.jar", "bytes=-20,0-9" );
+        assertEquals( 2, parts.size() );
+        assertContentSlice( parts.get( 0 ), 980, 20 );
+        assertContentSlice( parts.get( 1 ), 0, 10 );
     }
 
     public void testTrailingCommaRangeSpec()
@@ -5716,6 +5695,97 @@ public class JnlpDownloadServletIT
         }
     }
 
+    public void testMultipartOnVersionedResource()
+            throws Exception
+    {
+        List<byte[]> parts = fetchMultipart(
+                "http://localhost:" + port + "/sample.jar?version-id=1.0", "bytes=0-9,20-29" );
+        assertEquals( 2, parts.size() );
+        assertSliceBytes( parts.get( 0 ), "sample__V1_0.jar", 0, 10 );
+        assertSliceBytes( parts.get( 1 ), "sample__V1_0.jar", 20, 10 );
+    }
+
+    public void testMultipartOnGzipVariant()
+            throws Exception
+    {
+        HttpURLConnection connection = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/sample.jar" ).openConnection();
+        connection.setRequestMethod( "GET" );
+        connection.setRequestProperty( "Accept-Encoding", "gzip" );
+        connection.setRequestProperty( "Range", "bytes=0-9,20-29" );
+        connection.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            String contentType = connection.getHeaderField( "Content-Type" );
+            assertTrue( contentType.startsWith( "multipart/byteranges" ) );
+            String boundary = contentType.substring( contentType.indexOf( "boundary=" ) + 9 ).trim();
+            List<byte[]> parts = multipartParts( readAll( connection.getInputStream() ), boundary );
+            assertEquals( 2, parts.size() );
+            assertSliceBytes( parts.get( 0 ), "sample.jar.gz", 0, 10 );
+            assertSliceBytes( parts.get( 1 ), "sample.jar.gz", 20, 10 );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testMultipartOneUnsatisfiableRangeRejected()
+            throws Exception
+    {
+        HttpURLConnection connection = open( "http://localhost:" + port + "/sample.jar", "bytes=0-9,5000-6000" );
+        try
+        {
+            assertEquals( 416, connection.getResponseCode() );
+            assertEquals( "bytes */1000", connection.getHeaderField( "Content-Range" ) );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    public void testVaryAcceptEncodingOnFileResponses()
+            throws Exception
+    {
+        HttpURLConnection full = open( "http://localhost:" + port + "/sample.jar" );
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_OK, full.getResponseCode() );
+            assertEquals( "Accept-Encoding", full.getHeaderField( "Vary" ) );
+        }
+        finally
+        {
+            full.disconnect();
+        }
+
+        HttpURLConnection partial = open( "http://localhost:" + port + "/sample.jar", "bytes=10-19" );
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, partial.getResponseCode() );
+            assertEquals( "Accept-Encoding", partial.getHeaderField( "Vary" ) );
+        }
+        finally
+        {
+            partial.disconnect();
+        }
+
+        HttpURLConnection head = (HttpURLConnection) new URL(
+                "http://localhost:" + port + "/sample.jar" ).openConnection();
+        head.setRequestMethod( "HEAD" );
+        head.connect();
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_OK, head.getResponseCode() );
+            assertEquals( "Accept-Encoding", head.getHeaderField( "Vary" ) );
+        }
+        finally
+        {
+            head.disconnect();
+        }
+    }
+
     public void testHeadRequestIgnoresRange()
             throws Exception
     {
@@ -5838,6 +5908,68 @@ public class JnlpDownloadServletIT
     }
 
     /**
+     * Parses a {@code multipart/byteranges} response body into its parts.
+     */
+    private static List<byte[]> multipartParts( byte[] body, String boundary )
+    {
+        String text = new String( body, StandardCharsets.ISO_8859_1 );
+        String delimiter = "--" + boundary;
+        List<byte[]> parts = new ArrayList<>();
+        int searchFrom = 0;
+        while ( true )
+        {
+            int start = text.indexOf( delimiter, searchFrom );
+            if ( start == -1 )
+            {
+                break;
+            }
+            int headerEnd = text.indexOf( "\r\n\r\n", start );
+            if ( headerEnd == -1 )
+            {
+                break;
+            }
+            int contentStart = headerEnd + 4;
+            int next = text.indexOf( delimiter, contentStart );
+            int end = ( next == -1 ) ? text.length() : next;
+            String part = text.substring( contentStart, end );
+            if ( part.endsWith( "\r\n" ) )
+            {
+                part = part.substring( 0, part.length() - 2 );
+            }
+            parts.add( part.getBytes( StandardCharsets.ISO_8859_1 ) );
+            searchFrom = contentStart;
+            if ( next == -1 )
+            {
+                break;
+            }
+        }
+        return parts;
+    }
+
+    /**
+     * Opens a multi-range request and returns the parsed multipart parts.
+     */
+    private List<byte[]> fetchMultipart( String url, String range )
+            throws Exception
+    {
+        HttpURLConnection connection = open( url, range );
+        try
+        {
+            assertEquals( HttpURLConnection.HTTP_PARTIAL, connection.getResponseCode() );
+            String contentType = connection.getHeaderField( "Content-Type" );
+            assertTrue( "not multipart: " + contentType, contentType.startsWith( "multipart/byteranges" ) );
+            String boundary = contentType.substring( contentType.indexOf( "boundary=" ) + 9 ).trim();
+            byte[] body = readAll( connection.getInputStream() );
+            assertEquals( Long.parseLong( connection.getHeaderField( "Content-Length" ) ), body.length );
+            return multipartParts( body, boundary );
+        }
+        finally
+        {
+            connection.disconnect();
+        }
+    }
+
+    /**
      * Reads the raw (compressed) response body and asserts it equals the
      * expected slice of the gzip resource generated in the temp web root.
      */
@@ -5854,7 +5986,12 @@ public class JnlpDownloadServletIT
     private void assertSlice( HttpURLConnection connection, String fileName, int start, int length )
             throws IOException
     {
-        byte[] actual = readAll( connection.getInputStream() );
+        assertSliceBytes( readAll( connection.getInputStream() ), fileName, start, length );
+    }
+
+    private void assertSliceBytes( byte[] actual, String fileName, int start, int length )
+            throws IOException
+    {
         byte[] full = Files.readAllBytes( new File( webRoot, fileName ).toPath() );
         assertEquals( length, actual.length );
         byte[] expected = Arrays.copyOfRange( full, start, start + length );

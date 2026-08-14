@@ -428,20 +428,33 @@ public class JnlpDownloadServlet
         {
             long contentLength =
                     ( file != null ) ? file.length() : jr.getResource().openConnection().getContentLengthLong();
-            HttpRange range = HttpRange.parse( rangeHeader, contentLength );
-            if ( range == null )
+            java.util.List<HttpRange> ranges = HttpRange.parseAll( rangeHeader, contentLength );
+            if ( ranges == null )
             {
                 _log.addDebug( "Requested range not satisfiable: " + rangeHeader );
                 return DownloadResponse.getUnsatisfiableRangeResponse( jr.getMimeType(), jr.getLastModified(),
                                                                        jr.getReturnVersionId(), contentLength );
             }
+            if ( ranges.size() == 1 )
+            {
+                HttpRange range = ranges.get( 0 );
+                if ( file != null )
+                {
+                    return DownloadResponse.getFileDownloadResponse( file, jr.getMimeType(), jr.getLastModified(),
+                                                                     jr.getReturnVersionId(), range );
+                }
+                return DownloadResponse.getFileDownloadResponse( jr.getResource(), jr.getMimeType(),
+                                                                 jr.getLastModified(), jr.getReturnVersionId(), range );
+            }
+            // multiple satisfiable ranges -> multipart/byteranges (RFC 7233 4.1)
             if ( file != null )
             {
-                return DownloadResponse.getFileDownloadResponse( file, jr.getMimeType(), jr.getLastModified(),
-                                                                 jr.getReturnVersionId(), range );
+                return DownloadResponse.getMultipartFileDownloadResponse( file, jr.getMimeType(), jr.getLastModified(),
+                                                                          jr.getReturnVersionId(), ranges );
             }
-            return DownloadResponse.getFileDownloadResponse( jr.getResource(), jr.getMimeType(), jr.getLastModified(),
-                                                             jr.getReturnVersionId(), range );
+            return DownloadResponse.getMultipartFileDownloadResponse( jr.getResource(), jr.getMimeType(),
+                                                                      jr.getLastModified(), jr.getReturnVersionId(),
+                                                                      ranges );
         }
 
         // Return WAR file resource
