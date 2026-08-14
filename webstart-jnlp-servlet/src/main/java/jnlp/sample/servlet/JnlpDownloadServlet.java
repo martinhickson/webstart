@@ -200,8 +200,17 @@ public class JnlpDownloadServlet
 
             DownloadResponse dres;
 
+            // Validators are evaluated against the selected representation, so
+            // when Accept-Encoding negotiates a gzip/pack200 variant its
+            // last-modified is the relevant one (RFC 7232 section 2.2)
+            long conditionalLastModified = jnlpres.getLastModified();
+            if ( ifModifiedSince != -1 && dreq.getEncoding() != null )
+            {
+                conditionalLastModified = resolveEncoding( jnlpres, dreq ).getLastModified();
+            }
+
             if ( ifModifiedSince != -1 && dreq.getRange() == null &&
-                    ( ifModifiedSince / 1000 ) >= ( jnlpres.getLastModified() / 1000 ) )
+                    ( ifModifiedSince / 1000 ) >= ( conditionalLastModified / 1000 ) )
             {
                 // We divide the value returned by getLastModified here by 1000
                 // because if protocol is HTTP, last 3 digits will always be 
@@ -369,10 +378,11 @@ public class JnlpDownloadServlet
         {
             // If-Range (RFC 7233 section 3.2): if the date does not match the
             // current representation, ignore the Range header and send the full
-            // representation instead.
+            // representation instead. The validator applies to the
+            // encoding-negotiated variant actually served (jr).
             long ifRange = dreq.getIfRange();
-            if ( ifRange != -1 && jnlpres.getLastModified() != 0 &&
-                    ifRange / 1000 < jnlpres.getLastModified() / 1000 )
+            if ( ifRange != -1 && jr.getLastModified() != 0 &&
+                    ifRange / 1000 < jr.getLastModified() / 1000 )
             {
                 _log.addDebug( "If-Range does not match - sending full content" );
                 honorRange = false;

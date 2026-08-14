@@ -42,6 +42,8 @@ where practical for `-bravura` maintenance releases.
 - Added malformed `If-Range` and `If-Range`/`If-Modified-Since` on the URL-fallback path, `Accept-Encoding` q-values with spaces/extra params, tiny-file ranges, and a concurrent versioned+conditional request mix
 - The `version.xml` `<resource>` entry path is now covered end to end: virtual resources (`other.jar`, os-constrained `osjar.jar`) resolved purely through `version.xml`, with range, unsatisfiable, HEAD, os-match and os-no-match tests
 - Added hash-in-filename (`%23`), NUL-byte path rejection, version lookup on the URL-fallback server, platform no-match error, HEAD on a tiny file, and empty `Accept-Encoding` tests
+- Conditional validators now apply to the selected representation (RFC 7232 section 2.2): `If-Modified-Since` and `If-Range` are evaluated against the gzip/pack200 variant actually served when `Accept-Encoding` negotiates one, instead of the plain resource's `Last-Modified`
+- Added conditional-on-encoded-variant tests (gzip/pack200/versioned-gzip) with controlled fixture timestamps so the previously wrong behaviour would fail deterministically
 - Added locale-constrained versioned resources, case-sensitive and double-encoded path tests, `If-Range` on versioned resources, emoji filenames, versioned single-byte ranges, HEAD on versioned resources, and cross-directory concurrent versioned downloads
 - The `webstart-jnlp-servlet-it` binary fixtures are generated at test runtime instead of being committed; only the text `launch.jnlp` fixture is tracked
 - The streamed (non-NIO) range fallback for resources inside packaged JARs is now covered by integration tests via a second Undertow deployment
